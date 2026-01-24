@@ -1,0 +1,11 @@
+{
+  "map": {
+    "portalUrl": "https://hillsborough.maps.arcgis.com",
+    "itemId": "543ec15fb6374531864c865c5bbcd9d3"
+  },
+  "oldMap": {
+    "portalUrl": "https://hillsboroughcounty.maps.arcgis.com",
+    "itemId": "cfa44d5013794236aa7c31f3c0ea06a3",
+    "note": "Original ArcGIS Online webmap - fallback if needed"
+  }
+}
