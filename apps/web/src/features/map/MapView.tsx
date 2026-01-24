@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import esriConfig from "@arcgis/core/config";
 import EsriMap from "@arcgis/core/Map";
 import MapView from "@arcgis/core/views/MapView";
 import WebMap from "@arcgis/core/WebMap";
@@ -13,6 +14,7 @@ import Measurement from "@arcgis/core/widgets/Measurement";
 
 import Polygon from "@arcgis/core/geometry/Polygon";
 import Point from "@arcgis/core/geometry/Point";
+import Extent from "@arcgis/core/geometry/Extent";
 
 import { useResultsStore } from "../results/state";
 
@@ -53,14 +55,40 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
             }
           });
         } else {
-          // Enterprise Portal - create custom Portal instance
+          // Enterprise Portal - configure esriConfig and create Portal instance
+          esriConfig.portalUrl = portalUrl;
+
+          // Extract hostname and add to trusted servers for CORS
+          const portalHost = new URL(portalUrl).hostname;
+          esriConfig.request.trustedServers = esriConfig.request.trustedServers || [];
+          if (!esriConfig.request.trustedServers.includes(portalHost)) {
+            esriConfig.request.trustedServers.push(portalHost);
+          }
+
           const portal = new Portal({ url: portalUrl });
+
+          try {
+            // Load portal to check connectivity
+            await portal.load();
+            console.log("Portal loaded successfully:", portal.name);
+          } catch (err) {
+            console.error("Failed to load portal:", err);
+          }
+
           map = new WebMap({
             portalItem: {
               id: itemId,
               portal: portal
             }
           });
+        }
+
+        // Add error handling for WebMap loading
+        try {
+          await map.load();
+          console.log("WebMap loaded successfully:", map.portalItem?.title);
+        } catch (err) {
+          console.error("Failed to load WebMap:", err);
         }
       } else {
         map = new EsriMap({ basemap: "streets-vector" });
@@ -74,11 +102,19 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
       });
       (map as any).add(parcels);
 
+      // Hillsborough County extent
+      const hillsboroughExtent = new Extent({
+        xmin: -82.9,
+        ymin: 27.55,
+        xmax: -82.0,
+        ymax: 28.2,
+        spatialReference: { wkid: 4326 }
+      });
+
       const view = new MapView({
         map,
         container: divRef.current as HTMLDivElement,
-        center: [-82.46, 27.95],
-        zoom: 10,
+        extent: hillsboroughExtent,
         ui: {
           padding: {
             top: 0  // No padding needed since header is outside the map

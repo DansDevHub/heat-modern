@@ -92,7 +92,7 @@ function createDocument(): Document {
             spacing: { after: 100 },
             children: [
               new TextRun({
-                text: "DSD Viewer",
+                text: "HEAT",
                 bold: true,
                 size: 56,
                 color: brandBlue,
@@ -141,7 +141,7 @@ function createDocument(): Document {
           new Paragraph({
             children: [
               new TextRun({
-                text: "The DSD Viewer is an interactive mapping application that allows you to explore parcel information, zoning data, flood zones, and other property-related information for Hillsborough County, Florida. This guide will help you navigate the application and make the most of its features.",
+                text: "HEAT is an interactive mapping application that allows you to explore parcel information, zoning data, flood zones, and other property-related information for Hillsborough County, Florida. This guide will help you navigate the application and make the most of its features.",
                 size: 24,
               }),
             ],
@@ -165,7 +165,7 @@ function createDocument(): Document {
           new Paragraph({
             children: [
               new TextRun({
-                text: "When you first open the DSD Viewer, you will see an interactive map of Hillsborough County. The application header at the top contains the Hillsborough County logo, application title, and toolbar buttons for accessing various features.",
+                text: "When you first open HEAT, you will see an interactive map of Hillsborough County. The application header at the top contains the Hillsborough County logo, application title, and toolbar buttons for accessing various features.",
                 size: 24,
               }),
             ],
@@ -706,7 +706,7 @@ function createDocument(): Document {
           new Paragraph({
             children: [
               new TextRun({
-                text: "For technical support or questions about the DSD Viewer, please contact Hillsborough County Development Services.",
+                text: "For technical support or questions about HEAT, please contact Hillsborough County Development Services.",
                 size: 24,
               }),
             ],
@@ -760,8 +760,8 @@ function createDocument(): Document {
 async function main() {
   const doc = createDocument();
   const buffer = await Packer.toBuffer(doc);
-  fs.writeFileSync("DSD_Viewer_User_Guide.docx", buffer);
-  console.log("Document created: DSD_Viewer_User_Guide.docx");
+  fs.writeFileSync("HEAT_User_Guide.docx", buffer);
+  console.log("Document created: HEAT_User_Guide.docx");
 }
 
 main().catch(console.error);

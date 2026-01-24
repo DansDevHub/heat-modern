@@ -1,4 +1,4 @@
-# DSD Viewer Modernization — Starter Repo (Option B)
+# HEAT — Starter Repo (Option B)
 
 This repo is a **starter scaffold** for modernizing the legacy Dojo/Web AppBuilder (WAB) app into a modern web stack while preserving the “Results” workflow.
 

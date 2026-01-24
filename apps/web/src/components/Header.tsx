@@ -162,8 +162,11 @@ export default function Header({ view }: HeaderProps) {
           style={{ height: 40 }}
         />
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>
-          DSD Viewer
+          HEAT
         </h1>
+        <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 8 }}>
+          Hurricane Evacuation Assessment Tool
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -332,7 +335,7 @@ export default function Header({ view }: HeaderProps) {
 
         {/* Help Button */}
         <a
-          href="/assets/DSD_Viewer_User_Guide.docx"
+          href="/assets/HEAT_User_Guide.docx"
           download
           className="esri-widget esri-widget--button"
           style={{
