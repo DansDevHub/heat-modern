@@ -562,6 +562,71 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
     submitQuery(shelterQuestion);
   };
 
+  // Render summary with clickable shelter names
+  const renderSummaryWithLinks = (summary: string) => {
+    if (!result?.results || result.results.length === 0) {
+      return summary;
+    }
+
+    // Get shelter names from results
+    const shelterNames = result.results
+      .filter(r => r.shelter_na)
+      .map(r => r.shelter_na as string);
+
+    if (shelterNames.length === 0) {
+      return summary;
+    }
+
+    // Split summary by shelter names and create clickable elements
+    const parts: (string | JSX.Element)[] = [];
+    let remainingText = summary;
+    let keyIndex = 0;
+
+    for (const shelterName of shelterNames) {
+      const shelter = result.results.find(r => r.shelter_na === shelterName);
+      if (!shelter) continue;
+
+      const index = remainingText.indexOf(shelterName);
+      if (index === -1) continue;
+
+      // Add text before the shelter name
+      if (index > 0) {
+        parts.push(remainingText.substring(0, index));
+      }
+
+      // Add clickable shelter name
+      parts.push(
+        <button
+          key={`shelter-${keyIndex++}`}
+          onClick={() => handleShelterClick(shelter)}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            color: brandBlue,
+            textDecoration: "underline",
+            cursor: "pointer",
+            fontSize: "inherit",
+            fontFamily: "inherit",
+            fontWeight: 600
+          }}
+          title="Click for directions"
+        >
+          {shelterName}
+        </button>
+      );
+
+      remainingText = remainingText.substring(index + shelterName.length);
+    }
+
+    // Add any remaining text
+    if (remainingText) {
+      parts.push(remainingText);
+    }
+
+    return parts.length > 0 ? parts : summary;
+  };
+
   const exportToPDF = () => {
     if (!result?.results?.length) return;
 
@@ -912,8 +977,24 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
             <div style={{ fontWeight: 600, color: "#155724", marginBottom: 4 }}>Summary</div>
             <div style={{ color: "#155724", whiteSpace: "pre-line" }}>
               {/* Remove the shelter prompt from the displayed summary - we'll show buttons instead */}
-              {result.summary?.replace(/\n*Would you like me to find the nearest shelter to your location\?/i, "")}
+              {/* Make shelter names clickable for directions */}
+              {renderSummaryWithLinks(
+                result.summary?.replace(/\n*Would you like me to find the nearest shelter to your location\?/i, "") || ""
+              )}
             </div>
+
+            {/* Instructional text for shelter results */}
+            {hasShelterResults && (
+              <div style={{
+                marginTop: 8,
+                fontSize: 12,
+                color: "#155724",
+                fontStyle: "italic",
+                opacity: 0.8
+              }}>
+                Click on a shelter name above to get directions.
+              </div>
+            )}
 
             {/* Shelter follow-up buttons - after evacuation zone query */}
             {showShelterPrompt && addressForShelterQuery && (
