@@ -49,8 +49,14 @@ const AVAILABLE_LAYERS = [
   {
     key: "shelters",
     title: "Shelters",
-    url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/DisplayLayers/FeatureServer/10",
-    description: "Emergency shelter locations"
+    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/0",
+    description: "Hurricane emergency shelter locations. Fields: shelter_na (name), address, status (Open/Closed), capacity (total), occupancy (current), pet_friend (pet-friendly Yes/No). Available capacity = capacity - occupancy."
+  },
+  {
+    key: "evacuationZones",
+    title: "Evacuation Zones",
+    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/1",
+    description: "Hurricane evacuation zones (A, B, C, D, E) for Hillsborough County. Zone A evacuates first during hurricanes, followed by B, C, etc. Use queryAtPoint to find which evacuation zone an address is in."
   },
   {
     key: "waterTreatment",
@@ -158,10 +164,11 @@ export interface QueryPlan {
 
 export interface QueryStep {
   stepNumber: number;
-  action: "query" | "buffer" | "intersect" | "filter" | "count" | "geocode" | "nearest" | "queryAtPoint";
+  action: "query" | "buffer" | "intersect" | "filter" | "count" | "geocode" | "nearest" | "queryAtPoint" | "route";
   layerKey?: string;
   layerUrl?: string;
   address?: string;  // For geocode action
+  destinationAddress?: string;  // For route action (destination)
   bufferDistance?: number;
   bufferUnit?: "feet" | "miles" | "meters";
   whereClause?: string;
@@ -217,6 +224,7 @@ Available actions:
 - "queryAtPoint": Query a polygon layer to find what contains the point from previous step (use for "what district/zone/area is X in" questions)
 - "filter": Filter results based on attributes
 - "count": Count features
+- "route": Get driving directions between two addresses (specify address for origin and destinationAddress for destination)
 
 Example question: "Find the nearest school to 663 Flamingo Dr"
 
@@ -338,6 +346,133 @@ Example response:
   "outputFields": ["ZONING", "DESCRIPTION"]
 }
 
+Example question: "What evacuation zone is 601 E Kennedy Blvd in?"
+
+Example response:
+{
+  "description": "Find the hurricane evacuation zone for 601 E Kennedy Blvd",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "601 E Kennedy Blvd",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "queryAtPoint",
+      "layerKey": "evacuationZones",
+      "description": "Find which evacuation zone contains this location"
+    }
+  ],
+  "outputFields": ["ZONE"]
+}
+
+Example question: "Find open shelters"
+
+Example response:
+{
+  "description": "Find all currently open hurricane shelters",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "query",
+      "layerKey": "shelters",
+      "whereClause": "status = 'Open'",
+      "description": "Query shelters where status is Open"
+    }
+  ],
+  "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend"]
+}
+
+Example question: "Find the nearest open shelter to 123 Main St Tampa"
+
+Example response:
+{
+  "description": "Find the nearest open shelter to 123 Main St Tampa",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "123 Main St Tampa",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "nearest",
+      "layerKey": "shelters",
+      "whereClause": "status = 'Open'",
+      "maxResults": 1,
+      "description": "Find the nearest shelter that is currently open"
+    }
+  ],
+  "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend", "DISTANCE_MILES"]
+}
+
+Example question: "Find the nearest shelter to 123 Main St Tampa"
+
+Example response:
+{
+  "description": "Find the nearest shelter to 123 Main St Tampa",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "123 Main St Tampa",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "nearest",
+      "layerKey": "shelters",
+      "maxResults": 1,
+      "description": "Find the nearest shelter"
+    }
+  ],
+  "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend", "DISTANCE_MILES"]
+}
+
+Example question: "Find the nearest pet-friendly shelter to 123 Main St Tampa"
+
+Example response:
+{
+  "description": "Find the nearest pet-friendly shelter to 123 Main St Tampa",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "123 Main St Tampa",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "nearest",
+      "layerKey": "shelters",
+      "whereClause": "pet_friend = 'Yes'",
+      "maxResults": 1,
+      "description": "Find the nearest pet-friendly shelter"
+    }
+  ],
+  "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend", "DISTANCE_MILES"]
+}
+
+Example question: "Get directions from 123 Main St Tampa to Burnett Middle School at 1010 N Kingsway Rd"
+
+Example response:
+{
+  "description": "Get driving directions from 123 Main St Tampa to Burnett Middle School",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "route",
+      "address": "123 Main St Tampa",
+      "destinationAddress": "Burnett Middle School, 1010 N Kingsway Rd, Seffner, FL",
+      "description": "Calculate driving route from origin to shelter"
+    }
+  ],
+  "outputFields": ["directions"]
+}
+
 IMPORTANT:
 - Always respond with valid JSON only, no markdown or explanation
 - Use the exact layer keys provided above
@@ -346,6 +481,8 @@ IMPORTANT:
 - For distance queries like "within X feet", use buffer and intersect
 - For distance queries, always specify bufferDistance and bufferUnit
 - Common units: "feet", "miles", "meters"
+- For questions about "directions" or "how to get to", use the route action with address (origin) and destinationAddress
+- NEVER use placeholder text like "[your_address]", "[address]", "[location]", "<address>", etc. Always extract the EXACT address as it appears in the user's question. For example, if the question is "What evacuation zone is 123 Main St Tampa in?", use "123 Main St Tampa" as the address, not a placeholder.
 
 If you cannot answer the question with the available layers, respond with:
 {
@@ -417,13 +554,39 @@ export async function generateSummary(question: string, results: any[]): Promise
 Question: ${question}
 Results: ${JSON.stringify(cleanResults.slice(0, 3), null, 2)}
 
-Provide a direct, single-sentence answer. Examples of good responses:
+IMPORTANT: Only answer EXACTLY what was asked. Do NOT add extra information that wasn't requested.
+
+Provide a direct, natural language answer. Examples of good responses:
 - "663 Flamingo Dr is in Commissioner District 4."
 - "The nearest school is Hillsborough High School, 0.5 miles away."
 - "Found 3 schools within 500 feet of water treatment plants."
 - "123 Main St is zoned RS-50 (Residential Single Family)."
+- "601 E Kennedy Blvd is in Evacuation Zone A."
 
-Do NOT start with phrases like "Based on the results" or "The query shows". Just give the direct answer.`;
+For evacuation zone questions:
+- Answer with ONLY the zone information
+- After stating the zone, add on a new line: "Would you like me to find the nearest shelter to your location?"
+- Example: "3401 S Belcher Dr is in Evacuation Zone A.
+
+Would you like me to find the nearest shelter to your location?"
+
+For shelter results (ONLY when shelters were specifically requested), describe each shelter naturally on its own line:
+- "Burnett Middle School at 1010 N Kingsway Rd, Seffner, FL 33584 is open, accepts pets, and has room for 500."
+
+When listing multiple shelters, put each on a separate line:
+"Found 2 open shelters:
+
+Burnett Middle School at 1010 N Kingsway Rd accepts pets and has room for 500.
+
+Lincoln Elementary at 123 Oak Ave does not accept pets and has room for 300."
+
+For shelter data:
+- shelter_na is the name, address is the location, status is Open/Closed
+- pet_friend = "Yes" means "accepts pets", "No" means "does not accept pets"
+- "has room for X" where X = capacity - occupancy (available spaces)
+
+Do NOT start with phrases like "Based on the results" or "The query shows". Just give the direct answer.
+Do NOT include shelter information unless the user specifically asked about shelters.`;
 
   const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
     method: "POST",

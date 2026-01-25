@@ -12,7 +12,7 @@ import {
   getAvailableLayers,
   checkOllamaHealth
 } from "./services/ollamaService";
-import { executeQueryPlan } from "./services/aiQueryExecutor";
+import { executeQueryPlan, getRoute } from "./services/aiQueryExecutor";
 
 const app = express();
 app.use(cors());
@@ -288,6 +288,63 @@ app.post("/api/ai/query", async (req, res) => {
       question,
       error: err?.message ?? "Query execution failed"
     });
+  }
+});
+
+// Direct directions endpoint - uses destination coordinates instead of geocoding
+const DirectionsSchema = z.object({
+  originAddress: z.string().min(3, "Origin address is required"),
+  destinationName: z.string(),
+  destinationCoords: z.object({
+    x: z.number(),
+    y: z.number()
+  })
+});
+
+app.post("/api/ai/directions", async (req, res) => {
+  const parsed = DirectionsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const { originAddress, destinationName, destinationCoords } = parsed.data;
+
+  try {
+    // Geocode the origin address using the HC composite locator
+    const originResolved = await geocodeResolve({ text: originAddress });
+
+    // Get the route
+    const route = await getRoute(
+      { x: originResolved.location.x, y: originResolved.location.y },
+      destinationCoords
+    );
+
+    if (!route) {
+      return res.status(500).json({
+        success: false,
+        error: "Could not calculate route. Make sure ARCGIS_API_KEY is configured."
+      });
+    }
+
+    return res.json({
+      success: true,
+      origin: {
+        address: originResolved.matchedAddress,
+        geometry: originResolved.location
+      },
+      destination: {
+        name: destinationName,
+        geometry: destinationCoords
+      },
+      route: route
+    });
+  } catch (err: any) {
+    console.error("Directions error:", err);
+    const msg = err?.message ?? "Failed to get directions";
+    if ((err as any).code === "NOT_FOUND") {
+      return res.status(404).json({ success: false, error: `Could not find address: ${originAddress}` });
+    }
+    return res.status(500).json({ success: false, error: msg });
   }
 });
 

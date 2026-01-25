@@ -50,11 +50,39 @@ export async function executeQueryPlan(
     const finalResults = stepResults.get(lastStepNumber) || [];
 
     // Include both attributes and geometry for map visualization
-    const results = finalResults.map(f => ({
-      ...f.attributes,
-      // Include geometry if present (for map visualization)
-      ...(f.geometry && { _geometry: f.geometry })
-    }));
+    // If outputFields is specified, order results with those fields first
+    const results = finalResults.map(f => {
+      const attrs = f.attributes;
+
+      // If outputFields specified, build ordered result with those fields first
+      if (plan.outputFields && plan.outputFields.length > 0) {
+        const ordered: Record<string, any> = {};
+
+        // Add outputFields first (in order)
+        for (const field of plan.outputFields) {
+          // Check for case-insensitive match
+          const matchingKey = Object.keys(attrs).find(
+            k => k.toLowerCase() === field.toLowerCase()
+          );
+          if (matchingKey) {
+            ordered[matchingKey] = attrs[matchingKey];
+          }
+        }
+
+        // Add geometry if present
+        if (f.geometry) {
+          ordered._geometry = f.geometry;
+        }
+
+        return ordered;
+      }
+
+      // Default: include all attributes
+      return {
+        ...attrs,
+        ...(f.geometry && { _geometry: f.geometry })
+      };
+    });
 
     // Find geocoded location if there was a geocode step (to show origin point on map)
     let geocodedLocation: { address: string; geometry: any } | undefined;
@@ -74,8 +102,25 @@ export async function executeQueryPlan(
     // Calculate route if this was a nearest query and we have both origin and destination
     let route: RouteInfo | undefined;
     const hasNearestStep = plan.steps.some(s => s.action === "nearest");
+    const hasRouteStep = plan.steps.some(s => s.action === "route");
 
-    if (hasNearestStep && geocodedLocation?.geometry && finalResults.length > 0) {
+    // Check if route was calculated by route action
+    if (hasRouteStep && finalResults.length > 0) {
+      const routeResult = finalResults[0];
+      if (routeResult.attributes?._routeInfo) {
+        route = routeResult.attributes._routeInfo;
+        // Also set geocodedLocation from origin
+        if (routeResult.attributes._originGeometry) {
+          geocodedLocation = {
+            address: routeResult.attributes.ORIGIN || "",
+            geometry: routeResult.attributes._originGeometry
+          };
+        }
+        console.log(`Route from route action: ${route.totalDistance.toFixed(2)} miles, ${route.totalTime.toFixed(0)} minutes`);
+      }
+    }
+    // Calculate route for nearest queries
+    else if (hasNearestStep && geocodedLocation?.geometry && finalResults.length > 0) {
       const fromPoint = { x: geocodedLocation.geometry.x, y: geocodedLocation.geometry.y };
 
       // Get destination point from the first result
@@ -154,6 +199,9 @@ async function executeStep(
 
     case "count":
       return executeCount(step, previousResults);
+
+    case "route":
+      return executeRoute(step);
 
     default:
       throw new Error(`Unknown action: ${step.action}`);
@@ -568,6 +616,57 @@ function calculateCentroid(rings: number[][][]): { x: number; y: number } {
     x: sumX / ring.length,
     y: sumY / ring.length
   };
+}
+
+// Execute route action - get driving directions between two addresses
+async function executeRoute(step: QueryStep): Promise<Feature[]> {
+  if (!step.address) {
+    throw new Error("Route action requires an origin address");
+  }
+  if (!step.destinationAddress) {
+    throw new Error("Route action requires a destination address");
+  }
+
+  // Geocode the origin address
+  const originResult = await executeGeocode({ ...step, address: step.address } as QueryStep);
+  if (originResult.length === 0) {
+    throw new Error(`Could not geocode origin address: ${step.address}`);
+  }
+  const originGeom = originResult[0].geometry;
+
+  // Geocode the destination address
+  const destResult = await executeGeocode({ ...step, address: step.destinationAddress } as QueryStep);
+  if (destResult.length === 0) {
+    throw new Error(`Could not geocode destination address: ${step.destinationAddress}`);
+  }
+  const destGeom = destResult[0].geometry;
+
+  // Get the route
+  const routeInfo = await getRoute(
+    { x: originGeom.x, y: originGeom.y },
+    { x: destGeom.x, y: destGeom.y }
+  );
+
+  if (!routeInfo) {
+    throw new Error("Could not calculate route");
+  }
+
+  // Return a feature with route information
+  return [{
+    attributes: {
+      ORIGIN: step.address,
+      DESTINATION: step.destinationAddress,
+      DISTANCE_MILES: routeInfo.totalDistance.toFixed(2),
+      TIME_MINUTES: Math.round(routeInfo.totalTime),
+      _routeInfo: routeInfo,
+      _originGeometry: originGeom,
+      _destGeometry: destGeom
+    },
+    geometry: {
+      paths: routeInfo.geometry.paths,
+      spatialReference: routeInfo.geometry.spatialReference
+    }
+  }];
 }
 
 // Get driving route between two points using ArcGIS Online routing service

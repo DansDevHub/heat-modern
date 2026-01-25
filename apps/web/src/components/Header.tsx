@@ -547,7 +547,7 @@ export default function Header({ view }: HeaderProps) {
             top: 60,
             left: showAddressList ? 410 : showAddData ? 390 : 0,
             bottom: 0,
-            width: 420,
+            width: 520,
             background: "white",
             boxShadow: "2px 0 8px rgba(0,0,0,0.2)",
             zIndex: 998,

@@ -60,11 +60,29 @@ interface AvailableLayer {
 }
 
 const EXAMPLE_QUESTIONS = [
-  "Which schools are within 500 feet of a water treatment plant?",
-  "Show me all parcels in a flood zone",
-  "Find fire stations within 1 mile of schools",
-  "What zoning districts are near wells?"
+  "What evacuation zone is 601 E Kennedy Blvd in?",
+  "Find the nearest open shelter to 123 Main St Tampa",
+  "Show me all open shelters",
+  "What evacuation zone is my address in?"
 ];
+
+// Map database field names to user-friendly display names
+const FRIENDLY_HEADERS: Record<string, string> = {
+  shelter_na: "Shelter Name",
+  address: "Address",
+  status: "Status",
+  capacity: "Capacity",
+  occupancy: "Occupancy",
+  pet_friend: "Pets Allowed?",
+  DISTANCE_MILES: "Distance (mi)",
+  ZONE: "Zone",
+  NAME: "Name",
+  ADDRESS: "Address"
+};
+
+function getFriendlyHeader(key: string): string {
+  return FRIENDLY_HEADERS[key] || key;
+}
 
 export default function AiQueryPanel({ view }: AiQueryPanelProps) {
   const [question, setQuestion] = useState("");
@@ -74,6 +92,20 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
   const [availableLayers, setAvailableLayers] = useState<AvailableLayer[]>([]);
   const [showLayers, setShowLayers] = useState(false);
   const graphicsLayerRef = useRef<GraphicsLayer | null>(null);
+
+  // Directions dialog state
+  const [showDirectionsDialog, setShowDirectionsDialog] = useState(false);
+  const [selectedShelter, setSelectedShelter] = useState<Record<string, any> | null>(null);
+  const [startingAddress, setStartingAddress] = useState("");
+  const [directionsLoading, setDirectionsLoading] = useState(false);
+
+  // Address prompt dialog state (for "my address" type questions)
+  const [showAddressPrompt, setShowAddressPrompt] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState("");
+  const [userAddress, setUserAddress] = useState("");
+
+  // Track last searched address for follow-up shelter queries
+  const [lastSearchedAddress, setLastSearchedAddress] = useState("");
 
   // Check Ollama health on mount
   useEffect(() => {
@@ -111,8 +143,47 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
     }
   };
 
-  const submitQuery = async () => {
-    if (!question.trim() || loading) return;
+  // Check if question contains phrases that need user's address
+  const needsUserAddress = (q: string): boolean => {
+    const patterns = [
+      /\bmy\s+address\b/i,
+      /\bmy\s+location\b/i,
+      /\bmy\s+home\b/i,
+      /\bmy\s+house\b/i,
+      /\bwhere\s+i\s+live\b/i,
+      /\bwhere\s+i\s+am\b/i,
+      /\bam\s+i\s+in\b/i,
+      /\bdo\s+i\s+need\s+to\s+evacuate\b/i
+    ];
+    return patterns.some(p => p.test(q));
+  };
+
+  // Replace "my address" type phrases with actual address
+  const replaceAddressPlaceholder = (q: string, address: string): string => {
+    return q
+      .replace(/\bmy\s+address\b/gi, address)
+      .replace(/\bmy\s+location\b/gi, address)
+      .replace(/\bmy\s+home\b/gi, address)
+      .replace(/\bmy\s+house\b/gi, address)
+      .replace(/\bwhere\s+i\s+live\b/gi, address)
+      .replace(/\bwhere\s+i\s+am\b/gi, address);
+  };
+
+  const submitQuery = async (overrideQuestion?: string | React.MouseEvent) => {
+    // Handle case where called as onClick handler (receives event instead of string)
+    const queryText = typeof overrideQuestion === 'string'
+      ? overrideQuestion
+      : question.trim();
+    if (!queryText || loading) return;
+
+    // Check if we need to prompt for address
+    // Only prompt when called from button click (MouseEvent) or no argument - not when called with explicit string override
+    if (typeof overrideQuestion !== 'string' && needsUserAddress(queryText)) {
+      setPendingQuestion(queryText);
+      setUserAddress("");
+      setShowAddressPrompt(true);
+      return;
+    }
 
     setLoading(true);
     setResult(null);
@@ -122,7 +193,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
       const response = await fetch("/api/ai/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: question.trim() })
+        body: JSON.stringify({ question: queryText })
       });
 
       const data = await response.json();
@@ -333,6 +404,162 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
     setQuestion("");
     setResult(null);
     clearGraphics();
+    setShowDirectionsDialog(false);
+    setSelectedShelter(null);
+    setStartingAddress("");
+    setShowAddressPrompt(false);
+    setPendingQuestion("");
+    setUserAddress("");
+    setLastSearchedAddress("");
+  };
+
+  const handleShelterClick = (shelter: Record<string, any>) => {
+    setSelectedShelter(shelter);
+    setStartingAddress("");
+    setShowDirectionsDialog(true);
+  };
+
+  const getDirections = async () => {
+    if (!startingAddress.trim() || !selectedShelter) return;
+
+    setDirectionsLoading(true);
+    setShowDirectionsDialog(false);
+
+    const shelterName = selectedShelter.shelter_na || selectedShelter.NAME || "the shelter";
+    const shelterAddress = selectedShelter.address || selectedShelter.ADDRESS || "";
+    const directionsQuery = `Directions from ${startingAddress} to ${shelterName}`;
+
+    setQuestion(directionsQuery);
+
+    try {
+      // Get shelter coordinates from geometry
+      const shelterGeom = selectedShelter._geometry;
+      if (!shelterGeom || shelterGeom.x === undefined || shelterGeom.y === undefined) {
+        throw new Error("Shelter location not available");
+      }
+
+      // Call dedicated directions endpoint with coordinates
+      const response = await fetch("/api/ai/directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originAddress: startingAddress,
+          destinationName: `${shelterName} - ${shelterAddress}`,
+          destinationCoords: { x: shelterGeom.x, y: shelterGeom.y }
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setResult({
+          success: false,
+          question: directionsQuery,
+          plan: { description: "", steps: [] },
+          results: [],
+          summary: "",
+          error: data.error || "Failed to get directions"
+        });
+        return;
+      }
+
+      // Build result in the expected format
+      const routeResult: QueryResult = {
+        success: true,
+        question: directionsQuery,
+        plan: {
+          description: `Get directions to ${shelterName}`,
+          steps: [{ stepNumber: 1, action: "route", layerKey: "", description: "Calculate route" }]
+        },
+        results: [{
+          ORIGIN: data.origin.address,
+          DESTINATION: data.destination.name,
+          DISTANCE_MILES: data.route.totalDistance.toFixed(2),
+          TIME_MINUTES: Math.round(data.route.totalTime)
+        }],
+        summary: `Directions to ${shelterName}: ${data.route.totalDistance.toFixed(1)} miles, approximately ${Math.round(data.route.totalTime)} minutes.`,
+        geocodedLocation: {
+          address: data.origin.address,
+          geometry: data.origin.geometry
+        },
+        route: data.route
+      };
+
+      setResult(routeResult);
+
+      // Visualize route on map
+      visualizeResults(routeResult.results, routeResult.geocodedLocation, routeResult.route);
+    } catch (err) {
+      setResult({
+        success: false,
+        question: directionsQuery,
+        plan: { description: "", steps: [] },
+        results: [],
+        summary: "",
+        error: err instanceof Error ? err.message : "Failed to get directions"
+      });
+    } finally {
+      setDirectionsLoading(false);
+      setSelectedShelter(null);
+      setStartingAddress("");
+    }
+  };
+
+  const submitWithAddress = () => {
+    if (!userAddress.trim() || !pendingQuestion) return;
+
+    // Save the address for potential follow-up shelter queries
+    setLastSearchedAddress(userAddress.trim());
+
+    // Replace placeholder with actual address
+    const updatedQuestion = replaceAddressPlaceholder(pendingQuestion, userAddress.trim());
+    setQuestion(updatedQuestion);
+    setShowAddressPrompt(false);
+    setPendingQuestion("");
+    setUserAddress("");
+
+    // Submit the updated question
+    submitQuery(updatedQuestion);
+  };
+
+  // Check if the summary is asking about finding shelters (after evacuation zone query)
+  const showShelterPrompt = result?.success &&
+    result.summary?.toLowerCase().includes("would you like me to find the nearest shelter");
+
+  // Check if we just showed a shelter result and should offer more options
+  const hasShelterResults = result?.success &&
+    result.results?.some(r => r.shelter_na !== undefined) &&
+    !result.summary?.toLowerCase().includes("would you like me to find the nearest shelter");
+
+  // Get the address to use for shelter queries - prefer lastSearchedAddress, fallback to geocoded location
+  const addressForShelterQuery = lastSearchedAddress || result?.geocodedLocation?.address || "";
+
+  // Find the nearest shelter (any status)
+  const findNearestShelter = async () => {
+    if (!addressForShelterQuery || loading) return;
+
+    const shelterQuestion = `Find the nearest shelter to ${addressForShelterQuery}`;
+    setQuestion(shelterQuestion);
+    // Keep the address for follow-up queries
+    submitQuery(shelterQuestion);
+  };
+
+  // Find nearest open shelter
+  const findNearestOpenShelter = async () => {
+    if (!addressForShelterQuery || loading) return;
+
+    const shelterQuestion = `Find the nearest open shelter to ${addressForShelterQuery}`;
+    setQuestion(shelterQuestion);
+    submitQuery(shelterQuestion);
+  };
+
+  // Find nearest pet-friendly shelter
+  const findNearestPetFriendlyShelter = async () => {
+    if (!addressForShelterQuery || loading) return;
+
+    const shelterQuestion = `Find the nearest pet-friendly shelter to ${addressForShelterQuery}`;
+    setQuestion(shelterQuestion);
+    submitQuery(shelterQuestion);
   };
 
   const exportToPDF = () => {
@@ -683,7 +910,113 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
             }}
           >
             <div style={{ fontWeight: 600, color: "#155724", marginBottom: 4 }}>Summary</div>
-            <div style={{ color: "#155724" }}>{result.summary}</div>
+            <div style={{ color: "#155724", whiteSpace: "pre-line" }}>
+              {/* Remove the shelter prompt from the displayed summary - we'll show buttons instead */}
+              {result.summary?.replace(/\n*Would you like me to find the nearest shelter to your location\?/i, "")}
+            </div>
+
+            {/* Shelter follow-up buttons - after evacuation zone query */}
+            {showShelterPrompt && addressForShelterQuery && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #c3e6cb" }}>
+                <div style={{ fontSize: 13, color: "#155724", marginBottom: 8 }}>
+                  Would you like me to find the nearest shelter to your location?
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={findNearestShelter}
+                    disabled={loading}
+                    style={{
+                      padding: "8px 16px",
+                      background: brandBlue,
+                      color: "white",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.6 : 1,
+                      fontWeight: 600,
+                      fontSize: 13
+                    }}
+                  >
+                    Yes, Find Nearest Shelter
+                  </button>
+                  <button
+                    onClick={clearAll}
+                    disabled={loading}
+                    style={{
+                      padding: "8px 16px",
+                      background: "#f0f0f0",
+                      color: "#333",
+                      border: "1px solid #ddd",
+                      borderRadius: 4,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      fontSize: 13
+                    }}
+                  >
+                    Ask Something Else
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* More shelter options - after showing a shelter result */}
+            {hasShelterResults && addressForShelterQuery && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #c3e6cb" }}>
+                <div style={{ fontSize: 13, color: "#155724", marginBottom: 8 }}>
+                  Find a different type of shelter:
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={findNearestOpenShelter}
+                    disabled={loading}
+                    style={{
+                      padding: "8px 14px",
+                      background: brandBlue,
+                      color: "white",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.6 : 1,
+                      fontWeight: 600,
+                      fontSize: 12
+                    }}
+                  >
+                    Nearest Open Shelter
+                  </button>
+                  <button
+                    onClick={findNearestPetFriendlyShelter}
+                    disabled={loading}
+                    style={{
+                      padding: "8px 14px",
+                      background: brandBlue,
+                      color: "white",
+                      border: "none",
+                      borderRadius: 4,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.6 : 1,
+                      fontWeight: 600,
+                      fontSize: 12
+                    }}
+                  >
+                    Nearest Pet-Friendly Shelter
+                  </button>
+                  <button
+                    onClick={clearAll}
+                    disabled={loading}
+                    style={{
+                      padding: "8px 14px",
+                      background: "#f0f0f0",
+                      color: "#333",
+                      border: "1px solid #ddd",
+                      borderRadius: 4,
+                      cursor: loading ? "not-allowed" : "pointer",
+                      fontSize: 12
+                    }}
+                  >
+                    Ask Something Else
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Query Plan (collapsible) */}
@@ -790,7 +1123,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
                   <tr style={{ background: "#f0f0f0" }}>
                     {Object.keys(result.results[0])
                       .filter((k) => !["SHAPE", "geometry", "rings", "_geometry"].includes(k) && !k.startsWith("_"))
-                      .slice(0, 5)
+                      .slice(0, 6)
                       .map((key) => (
                         <th
                           key={key}
@@ -801,7 +1134,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
                             whiteSpace: "nowrap"
                           }}
                         >
-                          {key}
+                          {getFriendlyHeader(key)}
                         </th>
                       ))}
                   </tr>
@@ -811,10 +1144,30 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
                     <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
                       {Object.entries(row)
                         .filter(([k]) => !["SHAPE", "geometry", "rings", "_geometry"].includes(k) && !k.startsWith("_"))
-                        .slice(0, 5)
+                        .slice(0, 6)
                         .map(([key, value]) => (
                           <td key={key} style={{ padding: "4px 8px", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {String(value ?? "").substring(0, 50)}
+                            {/* Make shelter names clickable for directions */}
+                            {key === "shelter_na" && row.address ? (
+                              <button
+                                onClick={() => handleShelterClick(row)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  padding: 0,
+                                  color: brandBlue,
+                                  textDecoration: "underline",
+                                  cursor: "pointer",
+                                  fontSize: "inherit",
+                                  textAlign: "left"
+                                }}
+                                title="Click for directions"
+                              >
+                                {String(value ?? "").substring(0, 50)}
+                              </button>
+                            ) : (
+                              String(value ?? "").substring(0, 50)
+                            )}
                           </td>
                         ))}
                     </tr>
@@ -828,6 +1181,207 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Directions Dialog */}
+      {showDirectionsDialog && selectedShelter && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}
+          onClick={() => setShowDirectionsDialog(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 8,
+              padding: 24,
+              width: 480,
+              maxWidth: "90%",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 16px 0", color: brandBlue }}>
+              Get Directions
+            </h3>
+            <p style={{ margin: "0 0 8px 0", fontSize: 14, color: "#666" }}>
+              <strong>To:</strong> {selectedShelter.shelter_na || selectedShelter.NAME}
+            </p>
+            <p style={{ margin: "0 0 16px 0", fontSize: 12, color: "#888" }}>
+              {selectedShelter.address || selectedShelter.ADDRESS}
+            </p>
+
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+              Starting Address:
+            </label>
+            <input
+              type="text"
+              value={startingAddress}
+              onChange={(e) => setStartingAddress(e.target.value)}
+              placeholder="Enter your starting address (e.g., 601 E Kennedy Blvd, Tampa)"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #ddd",
+                borderRadius: 4,
+                fontSize: 14,
+                marginBottom: 16,
+                boxSizing: "border-box"
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  getDirections();
+                }
+              }}
+              autoFocus
+            />
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowDirectionsDialog(false)}
+                style={{
+                  padding: "10px 20px",
+                  background: "#f0f0f0",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={getDirections}
+                disabled={!startingAddress.trim() || directionsLoading}
+                style={{
+                  padding: "10px 20px",
+                  background: brandBlue,
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: !startingAddress.trim() || directionsLoading ? "not-allowed" : "pointer",
+                  opacity: !startingAddress.trim() || directionsLoading ? 0.6 : 1,
+                  fontSize: 14,
+                  fontWeight: 600
+                }}
+              >
+                {directionsLoading ? "Loading..." : "Get Directions"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Address Prompt Dialog (for "my address" type questions) */}
+      {showAddressPrompt && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000
+          }}
+          onClick={() => {
+            setShowAddressPrompt(false);
+            setPendingQuestion("");
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 8,
+              padding: 24,
+              width: 480,
+              maxWidth: "90%",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 16px 0", color: brandBlue }}>
+              What's Your Address?
+            </h3>
+            <p style={{ margin: "0 0 16px 0", fontSize: 14, color: "#666" }}>
+              To answer your question, we need to know your address.
+            </p>
+
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+              Your Address:
+            </label>
+            <input
+              type="text"
+              value={userAddress}
+              onChange={(e) => setUserAddress(e.target.value)}
+              placeholder="Enter your address (e.g., 601 E Kennedy Blvd, Tampa)"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #ddd",
+                borderRadius: 4,
+                fontSize: 14,
+                marginBottom: 16,
+                boxSizing: "border-box"
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  submitWithAddress();
+                }
+              }}
+              autoFocus
+            />
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowAddressPrompt(false);
+                  setPendingQuestion("");
+                }}
+                style={{
+                  padding: "10px 20px",
+                  background: "#f0f0f0",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 14
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitWithAddress}
+                disabled={!userAddress.trim()}
+                style={{
+                  padding: "10px 20px",
+                  background: brandBlue,
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: !userAddress.trim() ? "not-allowed" : "pointer",
+                  opacity: !userAddress.trim() ? 0.6 : 1,
+                  fontSize: 14,
+                  fontWeight: 600
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
