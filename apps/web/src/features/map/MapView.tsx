@@ -117,7 +117,7 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
         extent: hillsboroughExtent,
         ui: {
           padding: {
-            top: 0  // No padding needed since header is outside the map
+            top: 15  // Add spacing from the header
           }
         }
       });

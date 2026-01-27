@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import BasemapGallery from "@arcgis/core/widgets/BasemapGallery";
 import LayerList from "@arcgis/core/widgets/LayerList";
 import Legend from "@arcgis/core/widgets/Legend";
-import Sketch from "@arcgis/core/widgets/Sketch";
-import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import ResultsPanel from "../features/results/ResultsPanel";
-import AddressListPanel from "../features/addressList/AddressListPanel";
-import AddDataPanel from "../features/addData/AddDataPanel";
 import AiQueryPanel from "../features/aiQuery/AiQueryPanel";
 
 interface HeaderProps {
@@ -17,16 +13,11 @@ export default function Header({ view }: HeaderProps) {
   const basemapContainerRef = useRef<HTMLDivElement | null>(null);
   const layerListContainerRef = useRef<HTMLDivElement | null>(null);
   const legendContainerRef = useRef<HTMLDivElement | null>(null);
-  const sketchContainerRef = useRef<HTMLDivElement | null>(null);
   const [showBasemap, setShowBasemap] = useState(false);
   const [showLayers, setShowLayers] = useState(false); // Default to hidden
   const [showLegend, setShowLegend] = useState(false);
-  const [showDraw, setShowDraw] = useState(false);
-  const [showResults, setShowResults] = useState(true); // Default to visible
-  const [showAddressList, setShowAddressList] = useState(false);
-  const [showAddData, setShowAddData] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [showAiQuery, setShowAiQuery] = useState(false);
-  const graphicsLayerRef = useRef<any>(null);
 
   // Position state for draggable panels - start next to results pane
   const [layerPosition, setLayerPosition] = useState({
@@ -78,30 +69,18 @@ export default function Header({ view }: HeaderProps) {
     };
   }, [view, showLegend]);
 
-  // Create Sketch widget when visible
+  // Update map UI padding when left panels open/close
   useEffect(() => {
-    if (!view || !showDraw || !sketchContainerRef.current) return;
+    if (!view) return;
 
-    // Create graphics layer if it doesn't exist
-    if (!graphicsLayerRef.current) {
-      const graphicsLayer = new GraphicsLayer({
-        title: "Drawings"
-      });
-      view.map.add(graphicsLayer);
-      graphicsLayerRef.current = graphicsLayer;
-    }
+    // AI Query panel is 520px wide
+    const leftPadding = showAiQuery ? 535 : 15;
 
-    const sketch = new Sketch({
-      view: view,
-      layer: graphicsLayerRef.current,
-      container: sketchContainerRef.current,
-      creationMode: "update"
-    });
-
-    return () => {
-      sketch.destroy();
+    view.ui.padding = {
+      ...view.ui.padding,
+      left: leftPadding
     };
-  }, [view, showDraw]);
+  }, [view, showAiQuery]);
 
   // Drag handlers for layer list panel
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -190,26 +169,6 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-description" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
-        {/* Draw Button */}
-        <button
-          onClick={() => setShowDraw(!showDraw)}
-          className="esri-widget esri-widget--button"
-          style={{
-            width: 40,
-            height: 40,
-            background: showDraw ? brandOrange : "rgba(255,255,255,0.1)",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          title="Draw"
-        >
-          <span className="esri-icon-sketch-rectangle" style={{ fontSize: 16, color: "white" }}></span>
-        </button>
-
         {/* Legend Button */}
         <button
           onClick={() => setShowLegend(!showLegend)}
@@ -270,46 +229,6 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-basemap" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
-        {/* Create Address List Button */}
-        <button
-          onClick={() => setShowAddressList(!showAddressList)}
-          className="esri-widget esri-widget--button"
-          style={{
-            width: 40,
-            height: 40,
-            background: showAddressList ? brandOrange : "rgba(255,255,255,0.1)",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          title="Create Address List"
-        >
-          <span className="esri-icon-table" style={{ fontSize: 16, color: "white" }}></span>
-        </button>
-
-        {/* Add Data Button */}
-        <button
-          onClick={() => setShowAddData(!showAddData)}
-          className="esri-widget esri-widget--button"
-          style={{
-            width: 40,
-            height: 40,
-            background: showAddData ? brandOrange : "rgba(255,255,255,0.1)",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          title="Add Data"
-        >
-          <span className="esri-icon-plus-circled" style={{ fontSize: 16, color: "white" }}></span>
-        </button>
-
         {/* AI Query Button */}
         <button
           onClick={() => setShowAiQuery(!showAiQuery)}
@@ -355,27 +274,6 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-question" style={{ fontSize: 16, color: "white" }}></span>
         </a>
       </div>
-
-      {/* Draw Panel */}
-      {showDraw && (
-        <div
-          style={{
-            position: "absolute",
-            top: 60,
-            right: 220,
-            background: "white",
-            borderRadius: 4,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            zIndex: 1000,
-            padding: 12,
-            minWidth: 250,
-            maxHeight: 500,
-            overflow: "auto"
-          }}
-        >
-          <div ref={sketchContainerRef} style={{ width: "100%" }} />
-        </div>
-      )}
 
       {/* Legend Panel */}
       {showLegend && (
@@ -499,53 +397,13 @@ export default function Header({ view }: HeaderProps) {
         <ResultsPanel view={view} isVisible={showResults} />
       </div>
 
-      {/* Address List Panel */}
-      {showAddressList && (
-        <div
-          style={{
-            position: "fixed",
-            top: 60,
-            left: showAddressList ? 0 : -400,
-            bottom: 0,
-            width: 400,
-            background: "white",
-            boxShadow: "2px 0 8px rgba(0,0,0,0.2)",
-            zIndex: 1000,
-            overflow: "auto",
-            transition: "left 0.3s ease-in-out"
-          }}
-        >
-          <AddressListPanel view={view} />
-        </div>
-      )}
-
-      {/* Add Data Panel */}
-      {showAddData && (
-        <div
-          style={{
-            position: "fixed",
-            top: 60,
-            left: showAddressList ? 410 : 0,
-            bottom: 0,
-            width: 380,
-            background: "white",
-            boxShadow: "2px 0 8px rgba(0,0,0,0.2)",
-            zIndex: 999,
-            overflow: "auto",
-            transition: "left 0.3s ease-in-out"
-          }}
-        >
-          <AddDataPanel view={view} onClose={() => setShowAddData(false)} />
-        </div>
-      )}
-
       {/* AI Query Panel */}
       {showAiQuery && (
         <div
           style={{
             position: "fixed",
             top: 60,
-            left: showAddressList ? 410 : showAddData ? 390 : 0,
+            left: 0,
             bottom: 0,
             width: 520,
             background: "white",
