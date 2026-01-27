@@ -5,6 +5,8 @@ import Legend from "@arcgis/core/widgets/Legend";
 import ResultsPanel from "../features/results/ResultsPanel";
 import AiQueryPanel from "../features/aiQuery/AiQueryPanel";
 import FindSheltersPanel from "../features/shelters/FindSheltersPanel";
+import HelperPanel from "../features/helper/HelperPanel";
+import { useResultsStore } from "../features/results/state";
 
 interface HeaderProps {
   view: any;
@@ -45,9 +47,17 @@ export default function Header({ view }: HeaderProps) {
   const [showLegend, setShowLegend] = useState(true); // Default to visible
   const [showResults, setShowResults] = useState(false);
   const [showShelters, setShowShelters] = useState(false);
+  const [showHelper, setShowHelper] = useState(false);
   const [showAiQuery, setShowAiQuery] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
+
+  const setPanelActive = useResultsStore((s) => s.setPanelActive);
+
+  // Sync Results panel visibility with store so MapView knows when to handle clicks
+  useEffect(() => {
+    setPanelActive(showResults);
+  }, [showResults, setPanelActive]);
 
   // Create BasemapGallery widget when visible (widgets need visible container to render)
   useEffect(() => {
@@ -240,6 +250,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showResults;
             setShowResults(newState);
             if (newState) {
+              setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
               setShowLayers(false);
@@ -264,6 +275,37 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-description" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
+        {/* Helper Button */}
+        <button
+          onClick={() => {
+            const newState = !showHelper;
+            setShowHelper(newState);
+            if (newState) {
+              setShowResults(false);
+              setShowShelters(false);
+              setShowLegend(false);
+              setShowLayers(false);
+              setShowBasemap(false);
+              setShowAiQuery(false);
+            }
+          }}
+          className="esri-widget esri-widget--button"
+          style={{
+            width: 40,
+            height: 40,
+            background: showHelper ? brandOrange : "rgba(255,255,255,0.1)",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          title="Helper"
+        >
+          <span className="esri-icon-comment" style={{ fontSize: 16, color: "white" }}></span>
+        </button>
+
         {/* Find Shelters Button */}
         <button
           onClick={() => {
@@ -271,6 +313,7 @@ export default function Header({ view }: HeaderProps) {
             setShowShelters(newState);
             if (newState) {
               setShowResults(false);
+              setShowHelper(false);
               setShowLegend(false);
               setShowLayers(false);
               setShowBasemap(false);
@@ -301,6 +344,7 @@ export default function Header({ view }: HeaderProps) {
             setShowLegend(newState);
             if (newState) {
               setShowResults(false);
+              setShowHelper(false);
               setShowShelters(false);
               setShowLayers(false);
               setShowBasemap(false);
@@ -331,6 +375,7 @@ export default function Header({ view }: HeaderProps) {
             setShowLayers(newState);
             if (newState) {
               setShowResults(false);
+              setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
               setShowBasemap(false);
@@ -361,6 +406,7 @@ export default function Header({ view }: HeaderProps) {
             setShowBasemap(newState);
             if (newState) {
               setShowResults(false);
+              setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
               setShowLayers(false);
@@ -391,6 +437,7 @@ export default function Header({ view }: HeaderProps) {
             setShowAiQuery(newState);
             if (newState) {
               setShowResults(false);
+              setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
               setShowLayers(false);
@@ -589,6 +636,24 @@ export default function Header({ view }: HeaderProps) {
         }}
       >
         <FindSheltersPanel view={view} isVisible={showShelters} />
+      </div>
+
+      {/* Helper Panel - Fly-in from right */}
+      <div
+        style={{
+          position: "fixed",
+          top: 60,
+          right: showHelper ? 0 : -420,
+          bottom: 0,
+          width: 400,
+          background: "white",
+          boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
+          zIndex: 1000,
+          overflow: "hidden",
+          transition: "right 0.3s ease-in-out"
+        }}
+      >
+        <HelperPanel view={view} isVisible={showHelper} />
       </div>
 
       {/* AI Query Panel - Fly-in from right */}

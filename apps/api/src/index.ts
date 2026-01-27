@@ -113,6 +113,114 @@ app.get("/api/geocode/resolve", async (req, res) => {
   }
 });
 
+// Address geocoding endpoint (POST for consistency with other endpoints)
+app.post("/api/geocode/address", async (req, res) => {
+  try {
+    const { address } = req.body;
+    if (!address || typeof address !== "string" || address.trim().length < 3) {
+      return res.status(400).json({ error: "Address is required (min 3 characters)" });
+    }
+
+    const resolved = await geocodeResolve({ text: address.trim() });
+    return res.json({
+      candidates: [{
+        address: resolved.matchedAddress,
+        score: resolved.score,
+        location: resolved.location,
+        attributes: resolved.attributes
+      }]
+    });
+  } catch (err: any) {
+    const msg = err?.message ?? "Geocode error";
+    if ((err as any).code === "NOT_FOUND") {
+      return res.json({ candidates: [] });
+    }
+    return res.status(500).json({ error: msg });
+  }
+});
+
+// Evacuation zone identification endpoint
+// Using HEAT 2026 webmap layer - zone field is lowercase "zone", values are A, B, C, D, E
+const EVACUATION_ZONE_LAYER_URL = "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/1";
+
+app.post("/api/identify/zone", async (req, res) => {
+  try {
+    const { x, y, spatialReference = 102100 } = req.body;
+
+    if (typeof x !== "number" || typeof y !== "number") {
+      return res.status(400).json({ error: "x and y coordinates are required" });
+    }
+
+    // Query using point geometry - the layer will handle the spatial relationship
+    const geometry = {
+      x: x,
+      y: y,
+      spatialReference: { wkid: spatialReference }
+    };
+
+    const queryUrl = new URL(`${EVACUATION_ZONE_LAYER_URL}/query`);
+    const params = new URLSearchParams({
+      f: "json",
+      where: "1=1",
+      geometry: JSON.stringify(geometry),
+      geometryType: "esriGeometryPoint",
+      spatialRel: "esriSpatialRelIntersects",
+      inSR: String(spatialReference),
+      outFields: "zone,EvacOrder",
+      returnGeometry: "false"
+    });
+
+    const queryResp = await fetch(queryUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    });
+
+    if (!queryResp.ok) {
+      throw new Error(`Zone query failed: ${queryResp.status}`);
+    }
+
+    const queryJson = await queryResp.json() as {
+      features?: Array<{ attributes: Record<string, any> }>;
+      error?: { message: string };
+    };
+
+    if (queryJson.error) {
+      throw new Error(queryJson.error.message);
+    }
+
+    // Check if we found a zone
+    if (!queryJson.features || queryJson.features.length === 0) {
+      return res.json({
+        zone: null,
+        status: null,
+        message: "Location is not in an evacuation zone"
+      });
+    }
+
+    const feature = queryJson.features[0];
+    const attributes = feature.attributes;
+
+    // Extract zone information - the field is lowercase "zone" with values A, B, C, D, E
+    const zone = attributes.zone;
+
+    // Check for evacuation status from the EvacOrder field
+    // EvacOrder field contains "Yes" or "No" indicating if an evacuation order is active
+    const evacOrderValue = attributes.EvacOrder;
+    const status = evacOrderValue === "Yes" ? "mandatory" : null;
+
+    return res.json({
+      zone: zone,
+      status: status,
+      orderActive: evacOrderValue === "Yes",
+      attributes: attributes
+    });
+  } catch (err: any) {
+    console.error("Zone identification error:", err);
+    return res.status(500).json({ error: err?.message ?? "Zone identification failed" });
+  }
+});
+
 const ParcelLookupSchema = z.union([
   z.object({
     type: z.literal("point"),
@@ -427,8 +535,14 @@ app.post("/api/shelters/search", async (req, res) => {
     }
 
     // Process results and calculate distances
-    let shelters = (queryJson.features || []).map((f) => {
-      const shelter = {
+    interface ShelterResult {
+      [key: string]: any;
+      _geometry?: { x: number; y: number };
+      DISTANCE_MILES?: number;
+    }
+
+    let shelters: ShelterResult[] = (queryJson.features || []).map((f) => {
+      const shelter: ShelterResult = {
         ...f.attributes,
         _geometry: f.geometry
       };
@@ -447,7 +561,7 @@ app.post("/api/shelters/search", async (req, res) => {
 
     // Sort by distance if nearest is requested
     if (nearest) {
-      shelters.sort((a, b) => (a.DISTANCE_MILES || Infinity) - (b.DISTANCE_MILES || Infinity));
+      shelters.sort((a, b) => (a.DISTANCE_MILES ?? Infinity) - (b.DISTANCE_MILES ?? Infinity));
     }
 
     // Limit results

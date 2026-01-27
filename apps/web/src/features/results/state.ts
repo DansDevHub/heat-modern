@@ -31,16 +31,21 @@ type ResultsState = {
   lookup: ParcelLookup | null;
   results: Results | null;
   loading: boolean;
+  panelActive: boolean; // Whether the Results panel is open
 
   setLastClick: (l: ParcelLookup) => void;
   runLookup: (l: ParcelLookup) => Promise<void>;
   clearResults: () => void;
+  setPanelActive: (active: boolean) => void;
 };
 
 export const useResultsStore = create<ResultsState>((set) => ({
   lookup: null,
   results: null,
   loading: false,
+  panelActive: false,
+
+  setPanelActive: (active) => set({ panelActive: active }),
 
   setLastClick: (l) => {
     console.log("State: setLastClick called with:", l);

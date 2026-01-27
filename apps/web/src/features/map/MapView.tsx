@@ -10,6 +10,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import Graphic from "@arcgis/core/Graphic";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import Home from "@arcgis/core/widgets/Home";
+import Locate from "@arcgis/core/widgets/Locate";
 import Measurement from "@arcgis/core/widgets/Measurement";
 
 import Polygon from "@arcgis/core/geometry/Polygon";
@@ -133,7 +134,22 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
         index: 0
       });
 
-      // Add Measurement widget below Home button
+      // Add Locate widget below Home button (uses device GPS)
+      const locateBtn = new Locate({
+        view: view,
+        useHeadingEnabled: false,
+        goToOverride: (view, options) => {
+          // Zoom to a reasonable scale when locating
+          options.target.scale = 5000;
+          return view.goTo(options.target);
+        }
+      });
+      view.ui.add(locateBtn, {
+        position: "top-left",
+        index: 1
+      });
+
+      // Add Measurement widget below Locate button
       const measurementWidget = new Measurement({
         view: view
       });
@@ -148,6 +164,10 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
       }
 
       view.on("click", async (ev) => {
+        // Only handle parcel selection if the Results panel is active
+        const panelActive = useResultsStore.getState().panelActive;
+        if (!panelActive) return;
+
         // --- Hit test once ---
         const hit = await view.hitTest(ev);
         const parcelHit = hit.results.find(

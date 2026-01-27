@@ -116,7 +116,7 @@ export async function executeQueryPlan(
             geometry: routeResult.attributes._originGeometry
           };
         }
-        console.log(`Route from route action: ${route.totalDistance.toFixed(2)} miles, ${route.totalTime.toFixed(0)} minutes`);
+        console.log(`Route from route action: ${route?.totalDistance?.toFixed(2) ?? 'unknown'} miles, ${route?.totalTime?.toFixed(0) ?? 'unknown'} minutes`);
       }
     }
     // Calculate route for nearest queries
@@ -633,6 +633,9 @@ async function executeRoute(step: QueryStep): Promise<Feature[]> {
     throw new Error(`Could not geocode origin address: ${step.address}`);
   }
   const originGeom = originResult[0].geometry;
+  if (!originGeom?.x || !originGeom?.y) {
+    throw new Error(`Invalid origin geometry for address: ${step.address}`);
+  }
 
   // Geocode the destination address
   const destResult = await executeGeocode({ ...step, address: step.destinationAddress } as QueryStep);
@@ -640,6 +643,9 @@ async function executeRoute(step: QueryStep): Promise<Feature[]> {
     throw new Error(`Could not geocode destination address: ${step.destinationAddress}`);
   }
   const destGeom = destResult[0].geometry;
+  if (!destGeom?.x || !destGeom?.y) {
+    throw new Error(`Invalid destination geometry for address: ${step.destinationAddress}`);
+  }
 
   // Get the route
   const routeInfo = await getRoute(
