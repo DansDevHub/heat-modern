@@ -291,7 +291,7 @@ export default function Header({ view }: HeaderProps) {
           }}
           title="Find Shelters"
         >
-          <span className="esri-icon-home" style={{ fontSize: 16, color: "white" }}></span>
+          <span className="esri-icon-organization" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
         {/* Legend Button */}
