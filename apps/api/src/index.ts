@@ -348,6 +348,129 @@ app.post("/api/ai/directions", async (req, res) => {
   }
 });
 
+// Shelter search endpoint
+const ShelterSearchSchema = z.object({
+  address: z.string().min(3, "Address is required"),
+  filters: z.array(z.string()).optional(),
+  nearest: z.boolean().optional(),
+  maxResults: z.number().optional()
+});
+
+// Shelter layer URL
+const SHELTER_LAYER_URL = "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/0";
+
+app.post("/api/shelters/search", async (req, res) => {
+  const parsed = ShelterSearchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const { address, filters = [], nearest = true, maxResults = 10 } = parsed.data;
+
+  try {
+    // Geocode the address
+    const geocoded = await geocodeResolve({ text: address });
+    const originPoint = geocoded.location;
+
+    // Build where clause from filters
+    let whereClause = "1=1";
+    if (filters.length > 0) {
+      whereClause = filters.join(" AND ");
+    }
+
+    // Query shelters
+    const queryUrl = new URL(`${SHELTER_LAYER_URL}/query`);
+    const params: Record<string, string> = {
+      f: "json",
+      where: whereClause,
+      outFields: "*",
+      returnGeometry: "true",
+      outSR: "102100"
+    };
+
+    // If nearest is requested, use distance ordering
+    if (nearest) {
+      // Use geometry parameter to order by distance
+      params.geometry = JSON.stringify({
+        x: originPoint.x,
+        y: originPoint.y,
+        spatialReference: { wkid: 102100 }
+      });
+      params.geometryType = "esriGeometryPoint";
+      params.spatialRel = "esriSpatialRelIntersects";
+      params.distance = "80467"; // ~50 miles in meters
+      params.units = "esriSRUnit_Meter";
+      params.orderByFields = ""; // ArcGIS Online doesn't support distance ordering, we'll sort manually
+    }
+
+    const queryBody = new URLSearchParams(params);
+    const queryResp = await fetch(queryUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: queryBody.toString()
+    });
+
+    if (!queryResp.ok) {
+      throw new Error(`Shelter query failed: ${queryResp.status}`);
+    }
+
+    const queryJson = await queryResp.json() as {
+      features?: Array<{
+        attributes: Record<string, any>;
+        geometry?: { x: number; y: number };
+      }>;
+      error?: { message: string };
+    };
+
+    if (queryJson.error) {
+      throw new Error(queryJson.error.message);
+    }
+
+    // Process results and calculate distances
+    let shelters = (queryJson.features || []).map((f) => {
+      const shelter = {
+        ...f.attributes,
+        _geometry: f.geometry
+      };
+
+      // Calculate distance if we have geometry
+      if (f.geometry && nearest) {
+        const dx = f.geometry.x - originPoint.x;
+        const dy = f.geometry.y - originPoint.y;
+        const distanceMeters = Math.sqrt(dx * dx + dy * dy);
+        const distanceMiles = distanceMeters / 1609.344; // Convert to miles
+        shelter.DISTANCE_MILES = distanceMiles;
+      }
+
+      return shelter;
+    });
+
+    // Sort by distance if nearest is requested
+    if (nearest) {
+      shelters.sort((a, b) => (a.DISTANCE_MILES || Infinity) - (b.DISTANCE_MILES || Infinity));
+    }
+
+    // Limit results
+    shelters = shelters.slice(0, maxResults);
+
+    return res.json({
+      success: true,
+      shelters,
+      geocodedLocation: {
+        address: geocoded.matchedAddress,
+        geometry: originPoint
+      }
+    });
+  } catch (err: any) {
+    console.error("Shelter search error:", err);
+    const msg = err?.message ?? "Shelter search failed";
+    if ((err as any).code === "NOT_FOUND") {
+      return res.status(404).json({ success: false, error: `Could not find address: ${address}`, shelters: [] });
+    }
+    return res.status(500).json({ success: false, error: msg, shelters: [] });
+  }
+});
+
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${PORT}`);
