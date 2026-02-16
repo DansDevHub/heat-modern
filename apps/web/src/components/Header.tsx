@@ -91,7 +91,12 @@ export default function Header({ view }: HeaderProps) {
       if (layerListContainerRef.current) {
         layerList = new LayerList({
           view: view,
-          container: layerListContainerRef.current
+          container: layerListContainerRef.current,
+          listItemCreatedFunction: (event) => {
+            const item = event.item;
+            // Show all layers by default
+            item.open = true;
+          }
         });
       }
     });

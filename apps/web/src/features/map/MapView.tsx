@@ -43,7 +43,7 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
       const portalUrl = cfg?.map?.portalUrl ?? "https://www.arcgis.com";
       const itemId = cfg?.map?.itemId;
 
-      let map;
+      let map: EsriMap | WebMap;
       if (itemId) {
         // Check if this is ArcGIS Online (including organization URLs) or Enterprise Portal
         const isAGOL = portalUrl.includes(".arcgis.com");
@@ -101,7 +101,7 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
         title: "Parcels",
         outFields: ["*"]
       });
-      (map as any).add(parcels);
+      map.add(parcels);
 
       // Hillsborough County extent
       const hillsboroughExtent = new Extent({
