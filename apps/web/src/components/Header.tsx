@@ -577,8 +577,8 @@ export default function Header({ view, onHomeReset }: HeaderProps) {
               const s = {
                 critical: { bg: "#f8d7da", border: "#f5c6cb", color: "#721c24", label: "CRITICAL" },
                 warning:  { bg: "#fff3cd", border: "#ffc107", color: "#856404", label: "WARNING" },
-                info:     { bg: "#d1ecf1", border: "#bee5eb", color: "#0c5460", label: "INFO" },
-              }[latestAlert.Severity] ?? { bg: "#d1ecf1", border: "#bee5eb", color: "#0c5460", label: "INFO" };
+                info:     { bg: "#d4edda", border: "#c3e6cb", color: "#155724", label: "INFO" },
+              }[latestAlert.Severity] ?? { bg: "#d4edda", border: "#c3e6cb", color: "#155724", label: "INFO" };
               return (
                 <div style={{
                   padding: "6px 10px",

@@ -37,7 +37,7 @@ const brandBlue = "#054173";
 const SEVERITY_STYLES: Record<string, { bg: string; border: string; color: string; label: string }> = {
   critical: { bg: "#f8d7da", border: "#f5c6cb", color: "#721c24", label: "CRITICAL" },
   warning:  { bg: "#fff3cd", border: "#ffc107", color: "#856404", label: "WARNING" },
-  info:     { bg: "#d1ecf1", border: "#bee5eb", color: "#0c5460", label: "INFO" },
+  info:     { bg: "#d4edda", border: "#c3e6cb", color: "#155724", label: "INFO" },
 };
 
 const POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes

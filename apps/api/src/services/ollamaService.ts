@@ -1,32 +1,27 @@
 // apps/api/src/services/ollamaService.ts
 
-import { OVERLAYS } from "./overlays/overlayRegistry";
-
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "mistral:latest";
 
-// Available layers for spatial queries
+// Available layers for spatial queries — focused on hurricane evacuation
 const AVAILABLE_LAYERS = [
-  // From overlay registry
-  ...OVERLAYS.map(o => ({
-    key: o.key,
-    title: o.title,
-    url: o.url,
-    description: getLayerDescription(o.key)
-  })),
-  // Additional layers not in overlay registry but available for queries
-  // Using FeatureServer where available for better query support
   {
-    key: "parcels",
-    title: "Parcels",
-    url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/HC_Parcels/FeatureServer/0",
-    description: "Property parcels with folio numbers, addresses, owner information"
+    key: "shelters",
+    title: "Shelters",
+    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/0",
+    description: "Hurricane emergency shelter locations. Fields: shelter_na (name), address, status (Open/Closed), capacity (total), occupancy (current), pet_friend (pet-friendly Yes/No). Available capacity = capacity - occupancy."
+  },
+  {
+    key: "evacuationZones",
+    title: "Evacuation Zones",
+    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/1",
+    description: "Hurricane evacuation zones (A, B, C, D, E) for Hillsborough County. Zone A evacuates first during hurricanes, followed by B, C, etc. Use queryAtPoint to find which evacuation zone an address is in."
   },
   {
     key: "schools",
     title: "Schools",
     url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/DisplayLayers/FeatureServer/9",
-    description: "School locations in Hillsborough County"
+    description: "School locations in Hillsborough County (many shelters are at schools)"
   },
   {
     key: "fireStations",
@@ -47,54 +42,6 @@ const AVAILABLE_LAYERS = [
     description: "Park locations"
   },
   {
-    key: "shelters",
-    title: "Shelters",
-    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/0",
-    description: "Hurricane emergency shelter locations. Fields: shelter_na (name), address, status (Open/Closed), capacity (total), occupancy (current), pet_friend (pet-friendly Yes/No). Available capacity = capacity - occupancy."
-  },
-  {
-    key: "evacuationZones",
-    title: "Evacuation Zones",
-    url: "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/HEAT_2026_Webmap/FeatureServer/1",
-    description: "Hurricane evacuation zones (A, B, C, D, E) for Hillsborough County. Zone A evacuates first during hurricanes, followed by B, C, etc. Use queryAtPoint to find which evacuation zone an address is in."
-  },
-  {
-    key: "waterTreatment",
-    title: "Water Treatment Plants",
-    url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/CORPORATE/HC_WASTEWATER/MapServer/10",
-    description: "Wastewater treatment plant locations"
-  },
-  {
-    key: "productionWells",
-    title: "Production Wells",
-    url: "https://gisdextweb1.hillsboroughcounty.org/arcgis/rest/services/Hosted/Wells/FeatureServer/0",
-    description: "Production well locations"
-  },
-  {
-    key: "communityWells",
-    title: "Community Wells",
-    url: "https://gisdextweb1.hillsboroughcounty.org/arcgis/rest/services/Hosted/Wells/FeatureServer/1",
-    description: "Community well locations"
-  },
-  {
-    key: "communityWellsBuffer",
-    title: "Community Potable Wells Buffer",
-    url: "https://gisdextweb1.hillsboroughcounty.org/arcgis/rest/services/Hosted/Wells/FeatureServer/2",
-    description: "Buffer zones around community potable wells"
-  },
-  {
-    key: "wellheads",
-    title: "Wellheads",
-    url: "https://gisdextweb1.hillsboroughcounty.org/arcgis/rest/services/Hosted/Wells/FeatureServer/3",
-    description: "Wellhead protection areas"
-  },
-  {
-    key: "ntncWells",
-    title: "NTNC Wells",
-    url: "https://gisdextweb1.hillsboroughcounty.org/arcgis/rest/services/Hosted/Wells/FeatureServer/4",
-    description: "Non-transient non-community wells and community wells"
-  },
-  {
     key: "commissionerDistricts",
     title: "Commissioner Districts",
     url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/DisplayLayers/FeatureServer/1",
@@ -111,49 +58,14 @@ const AVAILABLE_LAYERS = [
     title: "ZIP Codes",
     url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/DisplayLayers/FeatureServer/6",
     description: "ZIP code boundaries - use for 'what zip code is X in' questions"
-  }
+  },
+  {
+    key: "parcels",
+    title: "Parcels",
+    url: "https://maps.hillsboroughcounty.org/arcgis/rest/services/InfoLayers/HC_Parcels/FeatureServer/0",
+    description: "Property parcels with folio numbers, addresses, owner information"
+  },
 ];
-
-function getLayerDescription(key: string): string {
-  const descriptions: Record<string, string> = {
-    zoning: "Zoning districts and classifications",
-    flood: "FEMA flood zones and hazard areas",
-    oldFlood: "Pre-2008 flood zone data",
-    communityBasePlanningArea: "Community plan areas for local planning",
-    countyWidePlanningArea: "Countywide planning areas",
-    futureLanduse: "Future land use designations",
-    urbanServiceArea: "Urban service area boundaries",
-    censusData: "Census tract demographic data",
-    taz: "Transportation analysis zones for traffic planning",
-    plannedDevelopment: "Planned development districts",
-    fireFee: "Fire impact fee districts",
-    parksFee: "Parks impact fee districts",
-    transFee: "Transportation impact fee districts",
-    windCat1: "Wind borne debris region - Category 1 hurricane",
-    windCat2: "Wind borne debris region - Category 2 hurricane",
-    windCat3: "Wind borne debris region - Category 3 hurricane",
-    windCat4: "Wind borne debris region - Category 4 hurricane",
-    overlayArea: "Special overlay zoning areas",
-    firm: "FEMA FIRM panel boundaries",
-    hcaaTea: "Hillsborough County Aviation Authority TEA zones",
-    hcaaLf: "HCAA Landfill notification areas",
-    hcaaSchool: "HCAA Non-compatible use areas for schools",
-    hcaaA: "HCAA Airport height zones",
-    cotWater: "City of Tampa water service areas",
-    cotWastewater: "City of Tampa wastewater service areas",
-    mobilityAssess: "Mobility assessment fee districts",
-    mobilityBenefit: "Mobility benefit fee districts",
-    competitiveSites: "Economic development competitive sites",
-    redevelopmentAreas: "Community redevelopment areas",
-    historicalResources: "Historic resource locations",
-    productionWells: "Production well locations",
-    communityWells: "Community well locations",
-    communityWellsBuffer: "Buffer zones around community potable wells",
-    wellheads: "Wellhead protection areas",
-    ntncWells: "Non-transient non-community wells and community wells"
-  };
-  return descriptions[key] || `${key} layer data`;
-}
 
 // Query execution plan generated by LLM
 export interface QueryPlan {
@@ -205,7 +117,7 @@ export interface QueryResult {
 }
 
 // System prompt for the LLM to understand spatial queries
-const SYSTEM_PROMPT = `You are a GIS query assistant for Hillsborough County, Florida. You help users query geographic data layers to answer spatial questions.
+const SYSTEM_PROMPT = `You are a GIS query assistant for Hillsborough County, Florida's Hurricane Evacuation Assessment Tool (HEAT). You help users query geographic data layers to answer questions about hurricane evacuation, shelters, and related spatial information.
 
 Available layers for queries:
 ${AVAILABLE_LAYERS.map(l => `- ${l.key}: ${l.title} - ${l.description}`).join('\n')}
@@ -225,126 +137,6 @@ Available actions:
 - "filter": Filter results based on attributes
 - "count": Count features
 - "route": Get driving directions between two addresses (specify address for origin and destinationAddress for destination)
-
-Example question: "Find the nearest school to 663 Flamingo Dr"
-
-Example response:
-{
-  "description": "Find the nearest school to 663 Flamingo Dr",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "geocode",
-      "address": "663 Flamingo Dr",
-      "description": "Geocode the address to get location coordinates"
-    },
-    {
-      "stepNumber": 2,
-      "action": "nearest",
-      "layerKey": "schools",
-      "maxResults": 1,
-      "description": "Find the nearest school to the geocoded location"
-    }
-  ],
-  "outputFields": ["NAME", "ADDRESS", "SCHOOL_TYPE"]
-}
-
-Example question: "Which schools are within 500 feet of a water treatment plant?"
-
-Example response:
-{
-  "description": "Find schools within 500 feet of water treatment plants",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "query",
-      "layerKey": "waterTreatment",
-      "description": "Get all water treatment plant locations"
-    },
-    {
-      "stepNumber": 2,
-      "action": "buffer",
-      "layerKey": "waterTreatment",
-      "bufferDistance": 500,
-      "bufferUnit": "feet",
-      "description": "Create 500-foot buffer around treatment plants"
-    },
-    {
-      "stepNumber": 3,
-      "action": "intersect",
-      "layerKey": "schools",
-      "description": "Find schools that intersect the buffer zones"
-    }
-  ],
-  "outputFields": ["NAME", "ADDRESS", "SCHOOL_TYPE"]
-}
-
-Example question: "Find the 3 closest hospitals to 123 Main St Tampa"
-
-Example response:
-{
-  "description": "Find the 3 closest hospitals to 123 Main St Tampa",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "geocode",
-      "address": "123 Main St Tampa",
-      "description": "Geocode the address to get location coordinates"
-    },
-    {
-      "stepNumber": 2,
-      "action": "nearest",
-      "layerKey": "hospitals",
-      "maxResults": 3,
-      "description": "Find the 3 nearest hospitals to the location"
-    }
-  ],
-  "outputFields": ["NAME", "ADDRESS", "FACILITY_TYPE"]
-}
-
-Example question: "What commissioner district is 663 Flamingo Dr in?"
-
-Example response:
-{
-  "description": "Find the commissioner district containing 663 Flamingo Dr",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "geocode",
-      "address": "663 Flamingo Dr",
-      "description": "Geocode the address to get location coordinates"
-    },
-    {
-      "stepNumber": 2,
-      "action": "queryAtPoint",
-      "layerKey": "commissionerDistricts",
-      "description": "Find which commissioner district contains this location"
-    }
-  ],
-  "outputFields": ["DISTRICT", "NAME", "COMMISSIONER"]
-}
-
-Example question: "What zoning is 123 Main St?"
-
-Example response:
-{
-  "description": "Find the zoning district for 123 Main St",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "geocode",
-      "address": "123 Main St",
-      "description": "Geocode the address to get location coordinates"
-    },
-    {
-      "stepNumber": 2,
-      "action": "queryAtPoint",
-      "layerKey": "zoning",
-      "description": "Find the zoning district at this location"
-    }
-  ],
-  "outputFields": ["ZONING", "DESCRIPTION"]
-}
 
 Example question: "What evacuation zone is 601 E Kennedy Blvd in?"
 
@@ -409,29 +201,6 @@ Example response:
   "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend", "DISTANCE_MILES"]
 }
 
-Example question: "Find the nearest shelter to 123 Main St Tampa"
-
-Example response:
-{
-  "description": "Find the nearest shelter to 123 Main St Tampa",
-  "steps": [
-    {
-      "stepNumber": 1,
-      "action": "geocode",
-      "address": "123 Main St Tampa",
-      "description": "Geocode the address to get location coordinates"
-    },
-    {
-      "stepNumber": 2,
-      "action": "nearest",
-      "layerKey": "shelters",
-      "maxResults": 1,
-      "description": "Find the nearest shelter"
-    }
-  ],
-  "outputFields": ["shelter_na", "address", "status", "capacity", "occupancy", "pet_friend", "DISTANCE_MILES"]
-}
-
 Example question: "Find the nearest pet-friendly shelter to 123 Main St Tampa"
 
 Example response:
@@ -473,6 +242,51 @@ Example response:
   "outputFields": ["directions"]
 }
 
+Example question: "Find the nearest hospital to 663 Flamingo Dr"
+
+Example response:
+{
+  "description": "Find the nearest hospital to 663 Flamingo Dr",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "663 Flamingo Dr",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "nearest",
+      "layerKey": "hospitals",
+      "maxResults": 1,
+      "description": "Find the nearest hospital to the geocoded location"
+    }
+  ],
+  "outputFields": ["NAME", "ADDRESS", "FACILITY_TYPE"]
+}
+
+Example question: "What commissioner district is 663 Flamingo Dr in?"
+
+Example response:
+{
+  "description": "Find the commissioner district containing 663 Flamingo Dr",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "geocode",
+      "address": "663 Flamingo Dr",
+      "description": "Geocode the address to get location coordinates"
+    },
+    {
+      "stepNumber": 2,
+      "action": "queryAtPoint",
+      "layerKey": "commissionerDistricts",
+      "description": "Find which commissioner district contains this location"
+    }
+  ],
+  "outputFields": ["DISTRICT", "NAME", "COMMISSIONER"]
+}
+
 IMPORTANT:
 - Always respond with valid JSON only, no markdown or explanation
 - Use the exact layer keys provided above
@@ -482,7 +296,7 @@ IMPORTANT:
 - For distance queries, always specify bufferDistance and bufferUnit
 - Common units: "feet", "miles", "meters"
 - For questions about "directions" or "how to get to", use the route action with address (origin) and destinationAddress
-- NEVER use placeholder text like "[your_address]", "[address]", "[location]", "<address>", etc. Always extract the EXACT address as it appears in the user's question. For example, if the question is "What evacuation zone is 123 Main St Tampa in?", use "123 Main St Tampa" as the address, not a placeholder.
+- NEVER use placeholder text like "[your_address]", "[address]", "[location]", "<address>", etc. Always extract the EXACT address as it appears in the user's question.
 
 If you cannot answer the question with the available layers, respond with:
 {
