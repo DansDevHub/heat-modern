@@ -1005,19 +1005,17 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
       {/* Header */}
       <div
         style={{
-          padding: "12px 16px",
-          background: brandBlue,
-          color: "white",
+          padding: 12,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center"
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Shelter Helper</h2>
+        <h2 style={{ margin: "8px 0 12px 0", color: "#000" }}>Shelter Helper</h2>
         <button
           onClick={showMainMenu}
           style={{
-            background: "rgba(255,255,255,0.2)",
+            background: brandBlue,
             border: "none",
             color: "white",
             padding: "4px 12px",

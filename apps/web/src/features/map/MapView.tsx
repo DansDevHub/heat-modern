@@ -134,7 +134,7 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
         index: 0
       });
 
-      // Add Locate widget below Home button (uses device GPS)
+      // Add Locate widget below zoom controls (uses device GPS)
       const locateBtn = new Locate({
         view: view,
         useHeadingEnabled: false,
@@ -146,7 +146,7 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
       });
       view.ui.add(locateBtn, {
         position: "top-left",
-        index: 1
+        index: 2
       });
 
       // Add Measurement widget below Locate button

@@ -9,6 +9,7 @@ export default function App() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <Header view={mapView} />
+      <div style={{ height: 60, flexShrink: 0 }} />
       <div style={{ flex: 1, position: "relative" }}>
         <MapViewComponent onViewReady={setMapView} />
       </div>

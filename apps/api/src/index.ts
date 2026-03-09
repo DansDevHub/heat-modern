@@ -585,6 +585,114 @@ app.post("/api/shelters/search", async (req, res) => {
   }
 });
 
+// Alerts & Messaging endpoint with server-side cache
+const ALERTS_TABLE_URL = "https://services.arcgis.com/apTfC6SUmnNfnxuF/arcgis/rest/services/Alerts_and_Messaging/FeatureServer/0";
+
+let alertsCache: { data: any; timestamp: number } | null = null;
+const ALERTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+app.get("/api/alerts", async (_req, res) => {
+  try {
+    const now = Date.now();
+
+    // Return cached data if still fresh
+    if (alertsCache && (now - alertsCache.timestamp) < ALERTS_CACHE_TTL) {
+      return res.json(alertsCache.data);
+    }
+
+    // Query active alerts: StartTime <= now AND (EndTime is null OR EndTime >= now)
+    const nowUtc = new Date().toISOString();
+    const whereClause = `StartTime <= '${nowUtc}' AND (EndTime IS NULL OR EndTime >= '${nowUtc}')`;
+
+    const queryUrl = new URL(`${ALERTS_TABLE_URL}/query`);
+    const params = new URLSearchParams({
+      f: "json",
+      where: whereClause,
+      outFields: "StormName,Message,Severity,StartTime,EndTime,EditDate",
+      orderByFields: "EditDate DESC",
+      returnGeometry: "false"
+    });
+
+    const queryResp = await fetch(queryUrl.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString()
+    });
+
+    if (!queryResp.ok) {
+      throw new Error(`Alerts query failed: ${queryResp.status}`);
+    }
+
+    const queryJson = await queryResp.json() as {
+      features?: Array<{ attributes: Record<string, any> }>;
+      error?: { message: string };
+    };
+
+    if (queryJson.error) {
+      throw new Error(queryJson.error.message);
+    }
+
+    const alerts = (queryJson.features || []).map((f) => f.attributes);
+
+    // Sort: critical first, then warning, then info; within each severity by EditDate desc
+    const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+    alerts.sort((a, b) => {
+      const sa = severityOrder[a.Severity] ?? 3;
+      const sb = severityOrder[b.Severity] ?? 3;
+      if (sa !== sb) return sa - sb;
+      return (b.EditDate ?? 0) - (a.EditDate ?? 0);
+    });
+
+    // Also fetch open shelters
+    let shelters: Record<string, any>[] = [];
+    try {
+      const shelterParams = new URLSearchParams({
+        f: "json",
+        where: "status='Open'",
+        outFields: "*",
+        orderByFields: "shelter_na ASC",
+        returnGeometry: "true",
+        outSR: "102100"
+      });
+
+      const shelterResp = await fetch(`${SHELTER_LAYER_URL}/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: shelterParams.toString()
+      });
+
+      if (shelterResp.ok) {
+        const shelterJson = await shelterResp.json() as {
+          features?: Array<{ attributes: Record<string, any> }>;
+          error?: { message: string };
+        };
+        if (!shelterJson.error) {
+          shelters = (shelterJson.features || []).map((f) => ({
+            ...f.attributes,
+            _geometry: f.geometry
+          }));
+        }
+      }
+    } catch (shelterErr) {
+      console.warn("Failed to fetch shelters for alerts panel:", shelterErr);
+    }
+
+    const responseData = { success: true, alerts, shelters, fetchedAt: now };
+
+    // Update cache
+    alertsCache = { data: responseData, timestamp: now };
+
+    return res.json(responseData);
+  } catch (err: any) {
+    console.error("Alerts fetch error:", err);
+    // Return stale cache if available
+    if (alertsCache) {
+      return res.json({ ...alertsCache.data, stale: true });
+    }
+    return res.status(500).json({ success: false, error: err?.message ?? "Failed to fetch alerts" });
+  }
+});
+
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${PORT}`);

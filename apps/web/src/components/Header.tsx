@@ -6,6 +6,7 @@ import ResultsPanel from "../features/results/ResultsPanel";
 import AiQueryPanel from "../features/aiQuery/AiQueryPanel";
 import FindSheltersPanel from "../features/shelters/FindSheltersPanel";
 import HelperPanel from "../features/helper/HelperPanel";
+import AlertsPanel from "../features/alerts/AlertsPanel";
 import { useResultsStore } from "../features/results/state";
 
 interface HeaderProps {
@@ -51,6 +52,7 @@ export default function Header({ view }: HeaderProps) {
   const [showAiQuery, setShowAiQuery] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
+  const [showInfoAlerts, setShowInfoAlerts] = useState(true);
 
   const setPanelActive = useResultsStore((s) => s.setPanelActive);
 
@@ -59,75 +61,61 @@ export default function Header({ view }: HeaderProps) {
     setPanelActive(showResults);
   }, [showResults, setPanelActive]);
 
-  // Create BasemapGallery widget when visible (widgets need visible container to render)
+  // Create each widget when its panel becomes visible, destroy when hidden.
+  // A canceled flag prevents the race condition where view.when() resolves
+  // after cleanup, which would leave orphaned widgets in the container.
   useEffect(() => {
     if (!view || !showBasemap || !basemapContainerRef.current) return;
 
-    let basemapGallery: InstanceType<typeof BasemapGallery> | null = null;
+    let widget: InstanceType<typeof BasemapGallery> | null = null;
+    let canceled = false;
 
     view.when(() => {
-      if (basemapContainerRef.current) {
-        basemapGallery = new BasemapGallery({
-          view: view,
-          container: basemapContainerRef.current
-        });
-      }
+      if (canceled || !basemapContainerRef.current) return;
+      widget = new BasemapGallery({ view, container: basemapContainerRef.current });
     });
 
     return () => {
-      if (basemapGallery) {
-        basemapGallery.destroy();
-      }
+      canceled = true;
+      widget?.destroy();
     };
   }, [view, showBasemap]);
 
-  // Create LayerList widget when visible (widgets need visible container to render)
   useEffect(() => {
     if (!view || !showLayers || !layerListContainerRef.current) return;
 
-    let layerList: InstanceType<typeof LayerList> | null = null;
+    let widget: InstanceType<typeof LayerList> | null = null;
+    let canceled = false;
 
     view.when(() => {
-      if (layerListContainerRef.current) {
-        layerList = new LayerList({
-          view: view,
-          container: layerListContainerRef.current,
-          listItemCreatedFunction: (event) => {
-            const item = event.item;
-            // Show all layers by default
-            item.open = true;
-          }
-        });
-      }
+      if (canceled || !layerListContainerRef.current) return;
+      widget = new LayerList({
+        view,
+        container: layerListContainerRef.current,
+        listItemCreatedFunction: (event) => { event.item.open = true; }
+      });
     });
 
     return () => {
-      if (layerList) {
-        layerList.destroy();
-      }
+      canceled = true;
+      widget?.destroy();
     };
   }, [view, showLayers]);
 
-  // Create Legend widget when visible (widgets need visible container to render)
   useEffect(() => {
     if (!view || !showLegend || !legendContainerRef.current) return;
 
-    let legend: InstanceType<typeof Legend> | null = null;
+    let widget: InstanceType<typeof Legend> | null = null;
+    let canceled = false;
 
-    // Wait for view to be fully ready before creating Legend
     view.when(() => {
-      if (legendContainerRef.current) {
-        legend = new Legend({
-          view: view,
-          container: legendContainerRef.current
-        });
-      }
+      if (canceled || !legendContainerRef.current) return;
+      widget = new Legend({ view, container: legendContainerRef.current });
     });
 
     return () => {
-      if (legend) {
-        legend.destroy();
-      }
+      canceled = true;
+      widget?.destroy();
     };
   }, [view, showLegend]);
 
@@ -147,8 +135,11 @@ export default function Header({ view }: HeaderProps) {
         justifyContent: "space-between",
         padding: "0 20px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-        position: "relative",
-        zIndex: 10
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1001
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -249,12 +240,33 @@ export default function Header({ view }: HeaderProps) {
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        {/* Alerts & Info Button */}
+        <button
+          onClick={() => setShowInfoAlerts(!showInfoAlerts)}
+          className="esri-widget esri-widget--button"
+          style={{
+            width: 40,
+            height: 40,
+            background: showInfoAlerts ? brandOrange : "rgba(255,255,255,0.1)",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          title="Alerts & Information"
+        >
+          <span className="esri-icon-notice-triangle" style={{ fontSize: 16, color: "white" }}></span>
+        </button>
+
         {/* Results Button */}
         <button
           onClick={() => {
             const newState = !showResults;
             setShowResults(newState);
             if (newState) {
+
               setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
@@ -286,6 +298,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showHelper;
             setShowHelper(newState);
             if (newState) {
+
               setShowResults(false);
               setShowShelters(false);
               setShowLegend(false);
@@ -317,6 +330,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showShelters;
             setShowShelters(newState);
             if (newState) {
+
               setShowResults(false);
               setShowHelper(false);
               setShowLegend(false);
@@ -348,6 +362,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showLegend;
             setShowLegend(newState);
             if (newState) {
+
               setShowResults(false);
               setShowHelper(false);
               setShowShelters(false);
@@ -379,6 +394,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showLayers;
             setShowLayers(newState);
             if (newState) {
+
               setShowResults(false);
               setShowHelper(false);
               setShowShelters(false);
@@ -410,6 +426,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showBasemap;
             setShowBasemap(newState);
             if (newState) {
+
               setShowResults(false);
               setShowHelper(false);
               setShowShelters(false);
@@ -441,6 +458,7 @@ export default function Header({ view }: HeaderProps) {
             const newState = !showAiQuery;
             setShowAiQuery(newState);
             if (newState) {
+
               setShowResults(false);
               setShowHelper(false);
               setShowShelters(false);
@@ -492,119 +510,122 @@ export default function Header({ view }: HeaderProps) {
         </a>
       </div>
 
-      {/* Legend Panel - Pinned to right side */}
+      {/* Alerts & Information Panel - Floating lower-left */}
       <div
         style={{
           position: "fixed",
-          top: 75, // 60px header + 15px padding to match home button
-          right: showLegend ? 15 : -280,
-          width: 250,
-          background: "white",
-          borderRadius: 4,
-          boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
-          zIndex: 999,
-          transition: "right 0.3s ease-in-out",
+          bottom: showInfoAlerts ? 15 : -500,
+          left: 15,
+          width: 380,
           maxHeight: "calc(100vh - 95px)",
-          overflow: "auto"
+          background: "white",
+          borderRadius: 8,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+          zIndex: 1000,
+          overflow: "hidden",
+          transition: "bottom 0.3s ease-in-out",
+          display: "flex",
+          flexDirection: "column"
         }}
       >
-        <div
+        <button
+          onClick={() => setShowInfoAlerts(false)}
           style={{
-            padding: "10px 12px",
-            background: brandBlue,
-            color: "white",
-            fontWeight: 600,
-            fontSize: 13,
-            borderTopLeftRadius: 4,
-            borderTopRightRadius: 4
+            position: "absolute",
+            top: 10,
+            right: 10,
+            background: "rgba(0,0,0,0.1)",
+            border: "none",
+            borderRadius: "50%",
+            width: 24,
+            height: 24,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 14,
+            color: "#666",
+            zIndex: 1
           }}
+          title="Dismiss"
         >
-          Legend
+          ×
+        </button>
+        <div style={{ overflow: "auto", flex: 1 }}>
+          <AlertsPanel view={view} isVisible={showInfoAlerts} />
         </div>
-        <div
-          ref={legendContainerRef}
-          style={{
-            padding: 8
-          }}
-        />
+      </div>
+
+      {/* Legend Panel - Fly-in from right */}
+      <div
+        style={{
+          position: "fixed",
+          top: 60,
+          right: showLegend ? 0 : -420,
+          bottom: 0,
+          width: 400,
+          background: "white",
+          boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
+          zIndex: 1000,
+          overflow: "auto",
+          transition: "right 0.3s ease-in-out"
+        }}
+      >
+        <div style={{ padding: 12, color: "#000", height: "100%", display: "flex", flexDirection: "column" }}>
+          <h2 style={{ margin: "8px 0 12px 0", color: "#000" }}>Legend</h2>
+          <div
+            ref={legendContainerRef}
+            style={{ flex: 1, overflow: "auto" }}
+          />
+        </div>
       </div>
 
       {/* Basemap Gallery Panel - Fly-in from right */}
       <div
         style={{
           position: "fixed",
-          top: 75,
-          right: showBasemap ? 15 : -320,
-          width: 300,
+          top: 60,
+          right: showBasemap ? 0 : -420,
+          bottom: 0,
+          width: 400,
           background: "white",
-          borderRadius: 4,
           boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
-          zIndex: 999,
-          transition: "right 0.3s ease-in-out",
-          maxHeight: "calc(100vh - 95px)",
-          overflow: "auto"
+          zIndex: 1000,
+          overflow: "auto",
+          transition: "right 0.3s ease-in-out"
         }}
       >
-        <div
-          style={{
-            padding: "10px 12px",
-            background: brandBlue,
-            color: "white",
-            fontWeight: 600,
-            fontSize: 13,
-            borderTopLeftRadius: 4,
-            borderTopRightRadius: 4
-          }}
-        >
-          Basemap Gallery
+        <div style={{ padding: 12, color: "#000", height: "100%", display: "flex", flexDirection: "column" }}>
+          <h2 style={{ margin: "8px 0 12px 0", color: "#000" }}>Basemap Gallery</h2>
+          <div
+            ref={basemapContainerRef}
+            style={{ flex: 1, overflow: "auto" }}
+          />
         </div>
-        <div
-          ref={basemapContainerRef}
-          style={{
-            padding: 8
-          }}
-        />
       </div>
 
       {/* Layer List Panel - Fly-in from right */}
       <div
         style={{
           position: "fixed",
-          top: 75,
-          right: showLayers ? 15 : -320,
-          width: 300,
+          top: 60,
+          right: showLayers ? 0 : -420,
+          bottom: 0,
+          width: 400,
           background: "white",
-          borderRadius: 4,
           boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
-          zIndex: 999,
-          transition: "right 0.3s ease-in-out",
-          maxHeight: "calc(100vh - 95px)",
+          zIndex: 1000,
           overflow: "auto",
-          display: "flex",
-          flexDirection: "column"
+          transition: "right 0.3s ease-in-out"
         }}
       >
-        <div
-          style={{
-            padding: "10px 12px",
-            background: brandBlue,
-            color: "white",
-            fontWeight: 600,
-            fontSize: 13,
-            borderTopLeftRadius: 4,
-            borderTopRightRadius: 4
-          }}
-        >
-          Layers
+        <div style={{ padding: 12, color: "#000", height: "100%", display: "flex", flexDirection: "column" }}>
+          <h2 style={{ margin: "8px 0 12px 0", color: "#000" }}>Layers</h2>
+          <div
+            ref={layerListContainerRef}
+            style={{ flex: 1, overflow: "auto" }}
+          />
         </div>
-        <div
-          ref={layerListContainerRef}
-          style={{
-            overflow: "auto",
-            flexGrow: 1,
-            padding: 8
-          }}
-        />
       </div>
 
       {/* Results Panel - Always mounted but conditionally visible */}
@@ -612,9 +633,9 @@ export default function Header({ view }: HeaderProps) {
         style={{
           position: "fixed",
           top: 60,
-          right: showResults ? 0 : -380,
+          right: showResults ? 0 : -420,
           bottom: 0,
-          width: 380,
+          width: 400,
           background: "white",
           boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
           zIndex: 1000,
@@ -654,7 +675,7 @@ export default function Header({ view }: HeaderProps) {
           background: "white",
           boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
           zIndex: 1000,
-          overflow: "hidden",
+          overflow: "auto",
           transition: "right 0.3s ease-in-out"
         }}
       >
@@ -666,12 +687,12 @@ export default function Header({ view }: HeaderProps) {
         style={{
           position: "fixed",
           top: 60,
-          right: showAiQuery ? 0 : -540,
+          right: showAiQuery ? 0 : -420,
           bottom: 0,
-          width: 520,
+          width: 400,
           background: "white",
           boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
-          zIndex: 998,
+          zIndex: 1000,
           overflow: "auto",
           transition: "right 0.3s ease-in-out"
         }}
