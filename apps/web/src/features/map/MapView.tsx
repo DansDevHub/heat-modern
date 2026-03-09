@@ -27,12 +27,15 @@ async function loadConfig() {
 
 interface MapViewComponentProps {
   onViewReady?: (view: MapView) => void;
+  onHomeReset?: () => void;
 }
 
-export default function MapViewComponent({ onViewReady }: MapViewComponentProps) {
+export default function MapViewComponent({ onViewReady, onHomeReset }: MapViewComponentProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<MapView | null>(null);
   const selectionGraphicRef = useRef<Graphic | null>(null);
+  const onHomeResetRef = useRef(onHomeReset);
+  onHomeResetRef.current = onHomeReset;
   const { setLastClick, results } = useResultsStore();
 
   useEffect(() => {
@@ -128,6 +131,9 @@ export default function MapViewComponent({ onViewReady }: MapViewComponentProps)
       // Add Home button widget to top-left (above zoom controls)
       const homeBtn = new Home({
         view: view
+      });
+      homeBtn.on("go", () => {
+        onHomeResetRef.current?.();
       });
       view.ui.add(homeBtn, {
         position: "top-left",

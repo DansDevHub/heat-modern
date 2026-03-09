@@ -2,15 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import BasemapGallery from "@arcgis/core/widgets/BasemapGallery";
 import LayerList from "@arcgis/core/widgets/LayerList";
 import Legend from "@arcgis/core/widgets/Legend";
-import ResultsPanel from "../features/results/ResultsPanel";
 import AiQueryPanel from "../features/aiQuery/AiQueryPanel";
 import FindSheltersPanel from "../features/shelters/FindSheltersPanel";
 import HelperPanel from "../features/helper/HelperPanel";
-import AlertsPanel from "../features/alerts/AlertsPanel";
-import { useResultsStore } from "../features/results/state";
+import AlertsPanel, { type Alert } from "../features/alerts/AlertsPanel";
 
 interface HeaderProps {
   view: any;
+  onHomeReset?: (fn: () => void) => () => void;
 }
 
 // Contact information data
@@ -39,27 +38,32 @@ const CONTACT_INFO = [
   { category: "Drainage issues, street flooding, or other flooding issues", agency: "Hillsborough County Public Works", phone: "(813) 635-5400", website: "HCFLGov.net/AtYourService" },
 ];
 
-export default function Header({ view }: HeaderProps) {
+export default function Header({ view, onHomeReset }: HeaderProps) {
   const basemapContainerRef = useRef<HTMLDivElement | null>(null);
   const layerListContainerRef = useRef<HTMLDivElement | null>(null);
   const legendContainerRef = useRef<HTMLDivElement | null>(null);
   const [showBasemap, setShowBasemap] = useState(false);
   const [showLayers, setShowLayers] = useState(false); // Default to hidden
   const [showLegend, setShowLegend] = useState(true); // Default to visible
-  const [showResults, setShowResults] = useState(false);
   const [showShelters, setShowShelters] = useState(false);
   const [showHelper, setShowHelper] = useState(false);
   const [showAiQuery, setShowAiQuery] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showInfoAlerts, setShowInfoAlerts] = useState(true);
+  const [alertsMinimized, setAlertsMinimized] = useState(false);
+  const [latestAlert, setLatestAlert] = useState<Alert | null>(null);
 
-  const setPanelActive = useResultsStore((s) => s.setPanelActive);
-
-  // Sync Results panel visibility with store so MapView knows when to handle clicks
+  // When the Home button is clicked, close shelter/helper panels and reset alerts
   useEffect(() => {
-    setPanelActive(showResults);
-  }, [showResults, setPanelActive]);
+    if (!onHomeReset) return;
+    return onHomeReset(() => {
+      setShowShelters(false);
+      setShowHelper(false);
+      setShowInfoAlerts(true);
+      setAlertsMinimized(false);
+    });
+  }, [onHomeReset]);
 
   // Create each widget when its panel becomes visible, destroy when hidden.
   // A canceled flag prevents the race condition where view.when() resolves
@@ -242,7 +246,11 @@ export default function Header({ view }: HeaderProps) {
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {/* Alerts & Info Button */}
         <button
-          onClick={() => setShowInfoAlerts(!showInfoAlerts)}
+          onClick={() => {
+            const next = !showInfoAlerts;
+            setShowInfoAlerts(next);
+            if (next) setAlertsMinimized(false);
+          }}
           className="esri-widget esri-widget--button"
           style={{
             width: 40,
@@ -260,78 +268,12 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-notice-triangle" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
-        {/* Results Button */}
-        <button
-          onClick={() => {
-            const newState = !showResults;
-            setShowResults(newState);
-            if (newState) {
-
-              setShowHelper(false);
-              setShowShelters(false);
-              setShowLegend(false);
-              setShowLayers(false);
-              setShowBasemap(false);
-              setShowAiQuery(false);
-            }
-          }}
-          className="esri-widget esri-widget--button"
-          style={{
-            width: 40,
-            height: 40,
-            background: showResults ? brandOrange : "rgba(255,255,255,0.1)",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          title="Results"
-        >
-          <span className="esri-icon-description" style={{ fontSize: 16, color: "white" }}></span>
-        </button>
-
-        {/* Helper Button */}
-        <button
-          onClick={() => {
-            const newState = !showHelper;
-            setShowHelper(newState);
-            if (newState) {
-
-              setShowResults(false);
-              setShowShelters(false);
-              setShowLegend(false);
-              setShowLayers(false);
-              setShowBasemap(false);
-              setShowAiQuery(false);
-            }
-          }}
-          className="esri-widget esri-widget--button"
-          style={{
-            width: 40,
-            height: 40,
-            background: showHelper ? brandOrange : "rgba(255,255,255,0.1)",
-            border: "none",
-            borderRadius: 4,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-          title="Helper"
-        >
-          <span className="esri-icon-comment" style={{ fontSize: 16, color: "white" }}></span>
-        </button>
-
         {/* Find Shelters Button */}
         <button
           onClick={() => {
             const newState = !showShelters;
             setShowShelters(newState);
             if (newState) {
-
-              setShowResults(false);
               setShowHelper(false);
               setShowLegend(false);
               setShowLayers(false);
@@ -356,6 +298,36 @@ export default function Header({ view }: HeaderProps) {
           <span className="esri-icon-organization" style={{ fontSize: 16, color: "white" }}></span>
         </button>
 
+        {/* Helper Button */}
+        <button
+          onClick={() => {
+            const newState = !showHelper;
+            setShowHelper(newState);
+            if (newState) {
+              setShowShelters(false);
+              setShowLegend(false);
+              setShowLayers(false);
+              setShowBasemap(false);
+              setShowAiQuery(false);
+            }
+          }}
+          className="esri-widget esri-widget--button"
+          style={{
+            width: 40,
+            height: 40,
+            background: showHelper ? brandOrange : "rgba(255,255,255,0.1)",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          title="Helper"
+        >
+          <span className="esri-icon-comment" style={{ fontSize: 16, color: "white" }}></span>
+        </button>
+
         {/* Legend Button */}
         <button
           onClick={() => {
@@ -363,7 +335,7 @@ export default function Header({ view }: HeaderProps) {
             setShowLegend(newState);
             if (newState) {
 
-              setShowResults(false);
+
               setShowHelper(false);
               setShowShelters(false);
               setShowLayers(false);
@@ -395,7 +367,7 @@ export default function Header({ view }: HeaderProps) {
             setShowLayers(newState);
             if (newState) {
 
-              setShowResults(false);
+
               setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
@@ -427,7 +399,7 @@ export default function Header({ view }: HeaderProps) {
             setShowBasemap(newState);
             if (newState) {
 
-              setShowResults(false);
+
               setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
@@ -459,7 +431,7 @@ export default function Header({ view }: HeaderProps) {
             setShowAiQuery(newState);
             if (newState) {
 
-              setShowResults(false);
+
               setShowHelper(false);
               setShowShelters(false);
               setShowLegend(false);
@@ -517,7 +489,7 @@ export default function Header({ view }: HeaderProps) {
           bottom: showInfoAlerts ? 15 : -500,
           left: 15,
           width: 380,
-          maxHeight: "calc(100vh - 95px)",
+          maxHeight: alertsMinimized ? "none" : "calc(100vh - 95px)",
           background: "white",
           borderRadius: 8,
           boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
@@ -528,31 +500,120 @@ export default function Header({ view }: HeaderProps) {
           flexDirection: "column"
         }}
       >
-        <button
-          onClick={() => setShowInfoAlerts(false)}
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            background: "rgba(0,0,0,0.1)",
-            border: "none",
-            borderRadius: "50%",
-            width: 24,
-            height: 24,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 14,
-            color: "#666",
-            zIndex: 1
-          }}
-          title="Dismiss"
-        >
-          ×
-        </button>
-        <div style={{ overflow: "auto", flex: 1 }}>
-          <AlertsPanel view={view} isVisible={showInfoAlerts} />
+        {/* Window-style action buttons: minimize, restore, dismiss */}
+        <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 4, zIndex: 1 }}>
+          {/* Minimize button */}
+          <button
+            onClick={() => setAlertsMinimized(true)}
+            style={{
+              background: "rgba(0,0,0,0.1)",
+              border: "none",
+              borderRadius: 4,
+              width: 24,
+              height: 24,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 16,
+              color: "#666",
+              lineHeight: 1
+            }}
+            title="Minimize"
+          >
+            &#8211;
+          </button>
+          {/* Restore button */}
+          <button
+            onClick={() => setAlertsMinimized(false)}
+            style={{
+              background: "rgba(0,0,0,0.1)",
+              border: "none",
+              borderRadius: 4,
+              width: 24,
+              height: 24,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              color: "#666",
+              lineHeight: 1
+            }}
+            title="Restore"
+          >
+            &#9633;
+          </button>
+          {/* Dismiss button */}
+          <button
+            onClick={() => setShowInfoAlerts(false)}
+            style={{
+              background: "rgba(0,0,0,0.1)",
+              border: "none",
+              borderRadius: 4,
+              width: 24,
+              height: 24,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 16,
+              color: "#666",
+              lineHeight: 1
+            }}
+            title="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Minimized view - show just the latest alert message */}
+        {alertsMinimized && (
+          <div style={{ padding: 12, paddingRight: 70, color: "#000" }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: brandBlue, marginBottom: 4 }}>
+              Alerts & Information
+            </div>
+            {latestAlert ? (() => {
+              const s = {
+                critical: { bg: "#f8d7da", border: "#f5c6cb", color: "#721c24", label: "CRITICAL" },
+                warning:  { bg: "#fff3cd", border: "#ffc107", color: "#856404", label: "WARNING" },
+                info:     { bg: "#d1ecf1", border: "#bee5eb", color: "#0c5460", label: "INFO" },
+              }[latestAlert.Severity] ?? { bg: "#d1ecf1", border: "#bee5eb", color: "#0c5460", label: "INFO" };
+              return (
+                <div style={{
+                  padding: "6px 10px",
+                  background: s.bg,
+                  border: `1px solid ${s.border}`,
+                  borderRadius: 4,
+                  fontSize: 12,
+                  color: s.color,
+                  lineHeight: 1.4
+                }}>
+                  <span style={{
+                    padding: "1px 6px",
+                    borderRadius: 8,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    background: s.border,
+                    color: s.color,
+                    marginRight: 6
+                  }}>
+                    {s.label}
+                  </span>
+                  {latestAlert.Message.length > 120
+                    ? latestAlert.Message.slice(0, 120) + "..."
+                    : latestAlert.Message}
+                </div>
+              );
+            })() : (
+              <div style={{ fontSize: 12, color: "#666" }}>No active alerts.</div>
+            )}
+          </div>
+        )}
+
+        {/* Full panel - always mounted for data fetching, hidden when minimized */}
+        <div style={{ overflow: "auto", flex: 1, display: alertsMinimized ? "none" : "block" }}>
+          <AlertsPanel view={view} isVisible={showInfoAlerts} onLatestAlert={setLatestAlert} />
         </div>
       </div>
 
@@ -626,24 +687,6 @@ export default function Header({ view }: HeaderProps) {
             style={{ flex: 1, overflow: "auto" }}
           />
         </div>
-      </div>
-
-      {/* Results Panel - Always mounted but conditionally visible */}
-      <div
-        style={{
-          position: "fixed",
-          top: 60,
-          right: showResults ? 0 : -420,
-          bottom: 0,
-          width: 400,
-          background: "white",
-          boxShadow: "-2px 0 8px rgba(0,0,0,0.2)",
-          zIndex: 1000,
-          overflow: "auto",
-          transition: "right 0.3s ease-in-out"
-        }}
-      >
-        <ResultsPanel view={view} isVisible={showResults} />
       </div>
 
       {/* Find Shelters Panel - Fly-in from right */}

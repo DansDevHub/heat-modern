@@ -27,7 +27,10 @@ interface Shelter {
 interface AlertsPanelProps {
   view?: any;
   isVisible?: boolean;
+  onLatestAlert?: (alert: Alert | null) => void;
 }
+
+export type { Alert };
 
 const brandBlue = "#054173";
 
@@ -39,7 +42,7 @@ const SEVERITY_STYLES: Record<string, { bg: string; border: string; color: strin
 
 const POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
 
-export default function AlertsPanel({ view, isVisible = true }: AlertsPanelProps) {
+export default function AlertsPanel({ view, isVisible = true, onLatestAlert }: AlertsPanelProps) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [shelters, setShelters] = useState<Shelter[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,6 +88,10 @@ export default function AlertsPanel({ view, isVisible = true }: AlertsPanelProps
 
   // Show only the single most recent alert (already sorted by severity then EditDate DESC)
   const latestAlert = alerts.length > 0 ? alerts[0] : null;
+
+  useEffect(() => {
+    onLatestAlert?.(latestAlert);
+  }, [latestAlert, onLatestAlert]);
 
   function zoomToShelter(shelter: Shelter) {
     if (!view || !shelter._geometry) return;
