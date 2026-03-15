@@ -1,6 +1,7 @@
 // apps/web/src/features/aiQuery/AiQueryPanel.tsx
 
 import { useState, useRef, useEffect } from "react";
+import { API_BASE } from "../../utils/apiBase";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Graphic from "@arcgis/core/Graphic";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
@@ -125,7 +126,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
 
   const checkOllamaHealth = async () => {
     try {
-      const response = await fetch("/api/ai/health");
+      const response = await fetch(`${API_BASE}/ai/health`);
       const data = await response.json();
       setOllamaStatus(data.ok ? "online" : "offline");
     } catch {
@@ -135,7 +136,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
 
   const fetchAvailableLayers = async () => {
     try {
-      const response = await fetch("/api/ai/layers");
+      const response = await fetch(`${API_BASE}/ai/layers`);
       const data = await response.json();
       setAvailableLayers(data.layers || []);
     } catch (err) {
@@ -190,7 +191,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
     clearGraphics();
 
     try {
-      const response = await fetch("/api/ai/query", {
+      const response = await fetch(`${API_BASE}/ai/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: queryText })
@@ -439,7 +440,7 @@ export default function AiQueryPanel({ view }: AiQueryPanelProps) {
       }
 
       // Call dedicated directions endpoint with coordinates
-      const response = await fetch("/api/ai/directions", {
+      const response = await fetch(`${API_BASE}/ai/directions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

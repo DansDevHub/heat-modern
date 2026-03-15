@@ -1,6 +1,7 @@
 // apps/web/src/features/results/state.ts
 
 import { create } from "zustand";
+import { API_BASE } from "../../utils/apiBase";
 
 type ParcelLookup =
   | { type: "point"; point: { x: number; y: number; spatialReference?: { wkid?: number } } }
@@ -60,7 +61,7 @@ export const useResultsStore = create<ResultsState>((set) => ({
 
     try {
       console.log("State: fetching /api/results");
-      const resp = await fetch("/api/results", {
+      const resp = await fetch(`${API_BASE}/results`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(l),

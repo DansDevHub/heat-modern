@@ -1,6 +1,7 @@
 // apps/web/src/features/results/ResultsPanel.tsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE } from "../../utils/apiBase";
 import { useResultsStore } from "./state";
 import { jsPDF } from "jspdf";
 
@@ -106,7 +107,7 @@ export default function ResultsPanel({ view, isVisible = true }: ResultsPanelPro
 
     setIsSuggesting(true);
     try {
-      const resp = await fetch(`/api/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
+      const resp = await fetch(`${API_BASE}/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
       const json = await resp.json();
       setSuggestions(json.suggestions ?? []);
       setShowSuggestions(true);

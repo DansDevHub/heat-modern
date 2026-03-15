@@ -1,6 +1,7 @@
 // apps/web/src/features/addressList/AddressListPanel.tsx
 
 import { useState, useRef, useEffect } from "react";
+import { API_BASE } from "../../utils/apiBase";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Graphic from "@arcgis/core/Graphic";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
@@ -215,7 +216,7 @@ export default function AddressListPanel({ view }: AddressListPanelProps) {
       console.log("Buffer geometry rings count:", bufferGeometry.rings.length);
 
       // Call the backend API endpoint to query parcels
-      const queryResponse = await fetch("/api/overlays/query-parcels", {
+      const queryResponse = await fetch(`${API_BASE}/overlays/query-parcels`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

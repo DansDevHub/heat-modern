@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Point from "@arcgis/core/geometry/Point";
+import { API_BASE } from "../../utils/apiBase";
 
 interface Alert {
   StormName: string;
@@ -54,7 +55,7 @@ export default function AlertsPanel({ view, isVisible = true, onLatestAlert }: A
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch("/api/alerts");
+      const resp = await fetch(`${API_BASE}/alerts`);
       const data = await resp.json();
       if (!resp.ok || !data.success) {
         throw new Error(data.error || "Failed to fetch alerts");

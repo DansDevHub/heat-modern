@@ -1,6 +1,7 @@
 // apps/web/src/features/shelters/FindSheltersPanel.tsx
 
 import { useState, useRef, useEffect } from "react";
+import { API_BASE } from "../../utils/apiBase";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Graphic from "@arcgis/core/Graphic";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol";
@@ -112,7 +113,7 @@ export default function FindSheltersPanel({ view, isVisible = true }: FindShelte
 
     setIsSuggesting(true);
     try {
-      const resp = await fetch(`/api/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
+      const resp = await fetch(`${API_BASE}/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
       const json = await resp.json();
       setSuggestions(json.suggestions ?? []);
       setShowSuggestions(true);
@@ -155,7 +156,7 @@ export default function FindSheltersPanel({ view, isVisible = true }: FindShelte
       if (filterPetFriendly) filters.push("pet_friend = 'Yes'");
       if (filterSpecialNeeds) filters.push("spns_frien = 'Yes'");
 
-      const response = await fetch("/api/shelters/search", {
+      const response = await fetch(`${API_BASE}/shelters/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -297,7 +298,7 @@ export default function FindSheltersPanel({ view, isVisible = true }: FindShelte
     }
 
     try {
-      const response = await fetch("/api/ai/directions", {
+      const response = await fetch(`${API_BASE}/ai/directions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

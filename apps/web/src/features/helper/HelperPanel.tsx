@@ -1,6 +1,7 @@
 // apps/web/src/features/helper/HelperPanel.tsx
 
 import { useState, useRef, useEffect } from "react";
+import { API_BASE } from "../../utils/apiBase";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer";
 import Graphic from "@arcgis/core/Graphic";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol";
@@ -240,7 +241,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
 
     try {
       // First geocode the address
-      const geocodeResp = await fetch("/api/geocode/address", {
+      const geocodeResp = await fetch(`${API_BASE}/geocode/address`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address })
@@ -266,7 +267,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
       }));
 
       // Query evacuation zone
-      const zoneResp = await fetch("/api/identify/zone", {
+      const zoneResp = await fetch(`${API_BASE}/identify/zone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -422,7 +423,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
       if (filters.pets) filterClauses.push("pet_friend = 'Yes'");
       if (filters.specialNeeds) filterClauses.push("spns_frien = 'Yes'");
 
-      const response = await fetch("/api/shelters/search", {
+      const response = await fetch(`${API_BASE}/shelters/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -543,7 +544,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
 
     try {
       // Geocode the address
-      const geocodeResp = await fetch("/api/geocode/address", {
+      const geocodeResp = await fetch(`${API_BASE}/geocode/address`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address })
@@ -569,7 +570,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
       }));
 
       // Query evacuation zone
-      const zoneResp = await fetch("/api/identify/zone", {
+      const zoneResp = await fetch(`${API_BASE}/identify/zone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -581,7 +582,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
       const zoneData = await zoneResp.json();
 
       // Search for shelters
-      const shelterResp = await fetch("/api/shelters/search", {
+      const shelterResp = await fetch(`${API_BASE}/shelters/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -667,7 +668,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/ai/directions", {
+      const response = await fetch(`${API_BASE}/ai/directions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -815,7 +816,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
 
     setIsSuggesting(true);
     try {
-      const resp = await fetch(`/api/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
+      const resp = await fetch(`${API_BASE}/geocode/suggest?q=${encodeURIComponent(trimmed)}`, { signal: ac.signal });
       const json = await resp.json();
       setSuggestions(json.suggestions ?? []);
       setShowSuggestions(true);
@@ -868,7 +869,7 @@ export default function HelperPanel({ view, isVisible = true }: HelperPanelProps
     addMessage({ type: "user", content: address });
 
     try {
-      const geocodeResp = await fetch("/api/geocode/address", {
+      const geocodeResp = await fetch(`${API_BASE}/geocode/address`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address })

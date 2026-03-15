@@ -6,7 +6,7 @@ module.exports = {
       cwd: "/var/www/heat/heat-modern",
       env_production: {
         NODE_ENV: "production",
-        PORT: 8787,
+        PORT: 8788,
       },
     },
   ],
