@@ -5,14 +5,14 @@ import express from "express";
 import cors from "cors";
 import { z } from "zod";
 
-import { getResultsForParcelLookup } from "./services/resultsAggregator";
-import { arcgisPostJson } from "./services/arcgisRest";
+import { getResultsForParcelLookup } from "./services/resultsAggregator.js";
+import { arcgisPostJson } from "./services/arcgisRest.js";
 import {
   generateQueryPlan,
   getAvailableLayers,
   checkOllamaHealth
-} from "./services/ollamaService";
-import { executeQueryPlan, getRoute } from "./services/aiQueryExecutor";
+} from "./services/ollamaService.js";
+import { executeQueryPlan, getRoute } from "./services/aiQueryExecutor.js";
 
 const app = express();
 app.use(cors());

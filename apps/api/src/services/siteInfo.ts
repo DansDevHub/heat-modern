@@ -1,4 +1,4 @@
-import { makeTag } from "../utils/makeTag";
+import { makeTag } from "../utils/makeTag.js";
 
 type ParcelAttrs = Record<string, any>;
 

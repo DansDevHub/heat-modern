@@ -1,8 +1,8 @@
 // apps/api/src/services/aiQueryExecutor.ts
 
-import { QueryPlan, QueryStep, QueryResult, RouteInfo, generateSummary } from "./ollamaService";
-import { arcgisPostJson } from "./arcgisRest";
-import { GEOMETRY_SERVER } from "./overlays/overlayRegistry";
+import { QueryPlan, QueryStep, QueryResult, RouteInfo, generateSummary } from "./ollamaService.js";
+import { arcgisPostJson } from "./arcgisRest.js";
+import { GEOMETRY_SERVER } from "./overlays/overlayRegistry.js";
 
 // Geocoder URL from environment
 const GEOCODER_URL = process.env.HC_COMPOSITE_URL?.replace(/\/+$/, "") ||
