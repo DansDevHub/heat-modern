@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@arcgis/core": "^4.29.0",
     "@esri/arcgis-rest-request": "^4.0.6",
     "cors": "^2.8.5",

@@ -334,7 +334,7 @@ app.get("/api/ai/health", async (_req, res) => {
     const healthy = await checkOllamaHealth();
     return res.json({
       ok: healthy,
-      message: healthy ? "Ollama is running" : "Ollama is not available"
+      message: healthy ? "Anthropic API is reachable" : "Anthropic API is not available"
     });
   } catch (err: any) {
     return res.json({ ok: false, message: err?.message ?? "Health check failed" });
@@ -361,14 +361,6 @@ app.post("/api/ai/query", async (req, res) => {
   const { question } = parsed.data;
 
   try {
-    // Check if Ollama is available
-    const ollamaHealthy = await checkOllamaHealth();
-    if (!ollamaHealthy) {
-      return res.status(503).json({
-        error: "AI service unavailable. Please ensure Ollama is running."
-      });
-    }
-
     // Generate query plan from natural language
     console.log("Generating query plan for:", question);
     const plan = await generateQueryPlan(question);
@@ -663,7 +655,7 @@ app.get("/api/alerts", async (_req, res) => {
 
       if (shelterResp.ok) {
         const shelterJson = await shelterResp.json() as {
-          features?: Array<{ attributes: Record<string, any> }>;
+          features?: Array<{ attributes: Record<string, any>; geometry?: any }>;
           error?: { message: string };
         };
         if (!shelterJson.error) {

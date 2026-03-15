@@ -1,7 +1,12 @@
 // apps/api/src/services/ollamaService.ts
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "mistral:latest";
+import Anthropic from "@anthropic-ai/sdk";
+
+const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 // Available layers for spatial queries — focused on hurricane evacuation
 const AVAILABLE_LAYERS = [
@@ -305,24 +310,21 @@ If you cannot answer the question with the available layers, respond with:
 }`;
 
 export async function generateQueryPlan(userQuestion: string): Promise<QueryPlan | { error: string; suggestion?: string }> {
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      prompt: userQuestion,
-      system: SYSTEM_PROMPT,
-      stream: false,
-      format: "json"
-    })
+  const response = await client.messages.create({
+    model: ANTHROPIC_MODEL,
+    max_tokens: 1024,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userQuestion }],
   });
 
-  if (!response.ok) {
-    throw new Error(`Ollama request failed: ${response.status} ${response.statusText}`);
+  const textBlock = response.content.find(b => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Anthropic API");
   }
 
-  const data = await response.json();
-  const responseText = data.response;
+  // Strip markdown code fences if present (e.g. ```json ... ```)
+  let responseText = textBlock.text.trim();
+  responseText = responseText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
   try {
     const plan = JSON.parse(responseText);
@@ -402,22 +404,18 @@ For shelter data:
 Do NOT start with phrases like "Based on the results" or "The query shows". Just give the direct answer.
 Do NOT include shelter information unless the user specifically asked about shelters.`;
 
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      prompt: summaryPrompt,
-      stream: false
-    })
-  });
+  try {
+    const response = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 512,
+      messages: [{ role: "user", content: summaryPrompt }],
+    });
 
-  if (!response.ok) {
+    const textBlock = response.content.find(b => b.type === "text");
+    return textBlock?.type === "text" ? textBlock.text.trim() : `Found ${results.length} results.`;
+  } catch {
     return `Found ${results.length} results.`;
   }
-
-  const data = await response.json();
-  return data.response?.trim() || `Found ${results.length} results.`;
 }
 
 export function getAvailableLayers() {
@@ -426,8 +424,12 @@ export function getAvailableLayers() {
 
 export async function checkOllamaHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
-    return response.ok;
+    const response = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 16,
+      messages: [{ role: "user", content: "Reply with: ok" }],
+    });
+    return response.content.some(b => b.type === "text");
   } catch {
     return false;
   }
