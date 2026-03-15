@@ -20,7 +20,7 @@ import Extent from "@arcgis/core/geometry/Extent";
 import { useResultsStore } from "../results/state";
 
 async function loadConfig() {
-  const resp = await fetch("/config/config.json");
+  const resp = await fetch(`${import.meta.env.BASE_URL}config/config.json`);
   if (!resp.ok) throw new Error("Missing /public/config/config.json");
   return (await resp.json()) as any;
 }
