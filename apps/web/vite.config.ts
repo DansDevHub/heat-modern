@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
     host: '0.0.0.0',
     proxy: {
       // so the web app can call the local API without CORS pain
-      "/api": "http://localhost:8787"
+      "/api": "http://localhost:8788"
     }
   }
 }));
